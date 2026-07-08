@@ -35,6 +35,9 @@ The server is designed around the original BSGO client protocol and asset expect
 
 Rough functional estimate: **around 75-85% of the main client-facing gameplay features** are currently connected. This is not an exact asset-count metric; it is a practical gameplay estimate. The remaining work is mostly around rarer, legacy, event-specific or partially implemented client systems, such as some market/battlespace/tournament-style flows and edge cases.
 
+<img width="1891" height="979" alt="Képernyőkép 2026-07-08 181313" src="https://github.com/user-attachments/assets/d8c49627-fe6b-49d4-9c67-1631577aced2" />
+<img width="1896" height="988" alt="Képernyőkép 2026-07-08 181006" src="https://github.com/user-attachments/assets/3a986784-b3c6-45f1-966b-191535433311" />
+
 ### Status
 
 The project is under active development and is NOT an official BSGO server. It is not affiliated with the original rights holders.
