@@ -1,0 +1,15 @@
+# github.com/Shran21
+[Unit]
+Description=reBSGO web panel
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=__PANEL_DIR__
+Environment=REBSGO_LANG=__LANG__
+ExecStart=__PANEL_DIR__/run.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

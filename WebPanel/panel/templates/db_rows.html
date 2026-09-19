@@ -1,0 +1,64 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ table }} · {{ t('db.title') }}{% endblock %}
+{% block content %}
+<p class="m0-8"><a class="backlink" href="/db">← {{ t('db.back_all') }}</a></p>
+<div class="page-head">
+  <h1 class="mono">{{ table }}</h1>
+  <span class="sub">{{ total }} {{ t('db.rows_suffix') }}</span>
+  <span class="spacer"></span>
+  {% if may_edit %}<a class="btn btn-small" href="/db/{{ table }}/new">+ {{ t('db.row.new') }}</a>{% endif %}
+</div>
+
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if error %}<p class="flash flash-error">{{ t(error) }}</p>{% endif %}
+
+<form class="searchbar" method="get" action="/db/{{ table }}">
+  <input type="search" name="q" value="{{ q }}" placeholder="{{ t('db.search') }}">
+  {% if sort %}<input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="desc" value="{{ desc }}">{% endif %}
+</form>
+
+<div class="card table-card col-12">
+  <div class="scroll-x">
+    <table>
+      <thead>
+        <tr>
+          {% for column in columns %}
+          <th><a href="/db/{{ table }}?q={{ q | urlencode }}&sort={{ column }}&desc={{ 0 if (sort == column and desc) else (1 if sort == column else 0) }}">
+            {{ column }}{% if sort == column %} <span class="sortmark">{{ '↓' if desc else '↑' }}</span>{% endif %}</a></th>
+          {% endfor %}
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr class="rowlink" tabindex="0" data-href="/db/{{ table }}/{{ row._rid }}">
+          {% for cell in row.cells %}
+          <td class="mono cellv">{% if cell.null %}<span class="dim">∅</span>{% else %}{{ cell.text }}{% endif %}</td>
+          {% endfor %}
+          <td class="num go" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="{{ columns | length + 1 }}" class="dim">{{ t('db.empty') }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if pages > 1 %}
+<div class="pager">
+  {% if page_no > 1 %}
+    <a class="btn btn-small" href="/db/{{ table }}?q={{ q | urlencode }}&sort={{ sort }}&desc={{ desc }}&p={{ page_no - 1 }}">← {{ t('db.prev') }}</a>
+  {% endif %}
+  <span class="dim">{{ page_no }} / {{ pages }}</span>
+  {% if page_no < pages %}
+    <a class="btn btn-small" href="/db/{{ table }}?q={{ q | urlencode }}&sort={{ sort }}&desc={{ desc }}&p={{ page_no + 1 }}">{{ t('db.next') }} →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,70 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ t('gametuning.title') }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('gametuning.title') }}</h1>
+  <span class="spacer"></span>
+  {% if may_edit %}
+  <form class="m0" method="post" action="/server/restart"
+        data-ask="{{ t('server.restart.sure') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn btn-small btn-danger" type="submit">{{ t('server.restart') }}</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if error %}<p class="flash flash-error">{{ t(error) }}</p>{% endif %}
+{% if sealed %}<p class="flash flash-warn">{{ t('gametuning.sealed') }}</p>{% endif %}
+<p class="hint m0-14">{{ t('gametuning.lead') }}</p>
+
+{% for card in cards %}
+<form method="post" action="/gametuning/{{ card.slug }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <details class="card col-12 cfgbox" {% if loop.first %}open{% endif %}>
+    <summary>{{ t(card.title) }} <span class="dim mono">· {{ card.path }}</span></summary>
+    {% if card.comment %}<p class="hint m8-10">{{ card.comment }}</p>{% endif %}
+    <div class="cfglist">
+      {% for row in card.rows %}
+      <div class="cfgrow cfgset">
+        <div class="cfgmeta">
+          <span class="mono cfgkey">{{ row.name }}</span>
+          <span class="cfghelp">
+            {% if row.kind == 'intlist' %}{{ t('gametuning.kind.intlist') }}
+            {% elif row.kind == 'bool' %}{{ t('gametuning.kind.bool') }}
+            {% else %}{{ row.kind }}{% if row.low is not none %} · {{ row.low }}–{{ row.high }}{% endif %}
+            {% endif %}
+          </span>
+        </div>
+        {% if row.kind == 'bool' %}
+        <select name="field_{{ row.name }}" {% if not may_edit or sealed %}disabled{% endif %}>
+          <option value="true" {% if row.value %}selected{% endif %}>true</option>
+          <option value="false" {% if not row.value %}selected{% endif %}>false</option>
+        </select>
+        {% else %}
+        <input name="field_{{ row.name }}" value="{{ row.value }}"
+               {% if not may_edit or sealed %}disabled{% endif %}>
+        {% endif %}
+      </div>
+      {% endfor %}
+      {% for lock in card.locked %}
+      <div class="cfgrow">
+        <div class="cfgmeta">
+          <span class="mono cfgkey">{{ lock.name }}</span>
+          <span class="cfghelp">{{ t('gametuning.locked') }}</span>
+        </div>
+        <span class="mono dim wrap-any">{{ lock.value }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% if may_edit and not sealed %}
+    <div class="btn-row mt12">
+      <button class="btn btn-primary" type="submit">{{ t('gametuning.save') }}</button>
+      <span class="hint">{{ t('gametuning.restarthint') }}</span>
+    </div>
+    {% endif %}
+  </details>
+</form>
+{% endfor %}
+{% endblock %}

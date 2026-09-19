@@ -1,0 +1,49 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ t('economy.title') }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('economy.title') }}</h1>
+  <span class="spacer"></span>
+  <span class="sub">{{ t('economy.lead') }}</span>
+</div>
+
+<div class="res-grid mb16">
+  {% for res in resources %}
+  <div class="res">
+    <div class="rk">{{ t(res.key) }}</div>
+    <div class="rv">{{ '{:,}'.format(res.total).replace(',', ' ') }}</div>
+    {% if res.richest %}
+    <div class="dim fs11">{{ t('economy.top') }}:
+      {{ res.richest[0] }} · {{ '{:,}'.format(res.richest[1]).replace(',', ' ') }}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card table-card col-12">
+  <div class="scroll-x">
+    <table class="cardable">
+      <thead>
+        <tr>
+          <th>{{ t('users.name') }}</th>
+          {% for res in resources %}<th class="num">{{ t(res.key) }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for pilot in pilots %}
+        <tr class="rowlink" tabindex="0" data-href="/users/{{ pilot.id }}">
+          <td class="cardhead"><strong>{{ pilot.name }}</strong></td>
+          {% for guid in guids %}
+          <td class="num mono" data-label="{{ t(resources[loop.index0].key) }}">
+            {{ '{:,}'.format(pilot.wealth.get(guid, 0)).replace(',', ' ') }}</td>
+          {% endfor %}
+        </tr>
+        {% else %}
+        <tr><td colspan="{{ resources | length + 1 }}" class="dim">{{ t('db.empty') }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,113 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ t('config.title') }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('config.title') }}</h1>
+  <span class="spacer"></span>
+  {% if may_edit %}
+  <form class="m0" method="post" action="/server/restart"
+        data-ask="{{ t('server.restart.sure') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn btn-small btn-danger" type="submit">{{ t('server.restart') }}</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if error %}<p class="flash flash-error">{{ t(error) }}</p>{% endif %}
+<p class="hint m0-6">{{ t('config.lead') }}</p>
+<p class="hint m0-14">{{ t('config.layers') }}</p>
+
+<form method="post" action="/config">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  {% for section in sections %}
+  <details class="card col-12 cfgbox" {% if loop.first %}open{% endif %}>
+    <summary>{{ section.name }} <span class="dim">· {{ section.entries | length }}</span></summary>
+    <div class="cfglist">
+      {% for entry in section.entries %}
+      <div class="cfgrow {% if entry.value %}cfgset{% endif %}">
+        <div class="cfgmeta">
+          <span class="mono cfgkey">{{ entry.key }}</span>
+          {% if entry.careful %}<span class="badge">{{ t('config.careful') }}</span>{% endif %}
+          {% if entry.help %}<span class="cfghelp">{{ entry.help }}</span>{% endif %}
+        </div>
+        {% if entry.is_bool %}
+        <select name="value_{{ entry.key }}" {% if not may_edit %}disabled{% endif %}>
+          <option value="">{{ t('config.default') }}{% if entry.default %} ({{ entry.default }}){% endif %}</option>
+          <option value="true" {% if entry.value.lower() == 'true' %}selected{% endif %}>true</option>
+          <option value="false" {% if entry.value.lower() == 'false' %}selected{% endif %}>false</option>
+        </select>
+        {% else %}
+        <input name="value_{{ entry.key }}" value="{{ entry.value }}"
+               placeholder="{{ entry.default or t('config.default') }}"
+               {% if not may_edit %}disabled{% endif %}>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endfor %}
+
+  {% if stray %}
+  <details class="card col-12 cfgbox" open>
+    <summary>{{ t('config.stray') }} <span class="dim">· {{ stray | length }}</span></summary>
+    <div class="cfglist">
+      {% for entry in stray %}
+      <div class="cfgrow cfgset">
+        <div class="cfgmeta">
+          <span class="mono cfgkey">{{ entry.key }}</span>
+          {% if entry.careful %}<span class="badge">{{ t('config.careful') }}</span>{% endif %}
+          {% if entry.note_key %}<span class="cfghelp">{{ t(entry.note_key) }}</span>{% endif %}
+        </div>
+        <input name="value_{{ entry.key }}" value="{{ entry.value }}"
+               {% if not may_edit %}disabled{% endif %}>
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+
+  {% if may_edit %}
+  <div class="btn-row mt14">
+    <button class="btn btn-primary" type="submit">{{ t('config.save') }}</button>
+  </div>
+  <p class="hint">{{ t('config.hint') }}</p>
+  {% endif %}
+</form>
+
+<form class="mt18" method="post" action="/config/panel">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <details class="card col-12 cfgbox">
+    <summary>{{ t('config.panel.title') }} <span class="dim">· {{ panel_entries | length }}</span></summary>
+    <p class="hint m8-10">{{ t('config.panel.lead') }}</p>
+    <div class="cfglist">
+      {% for entry in panel_entries %}
+      <div class="cfgrow {% if entry.value %}cfgset{% endif %}">
+        <div class="cfgmeta">
+          <span class="mono cfgkey">{{ entry.key }}</span>
+          {% if entry.careful %}<span class="badge">{{ t('config.careful') }}</span>{% endif %}
+          <span class="cfghelp">{{ t('config.panel.help.' ~ entry.key) }}</span>
+        </div>
+        <input name="panel_{{ entry.key }}" value="{{ entry.value }}"
+               placeholder="{{ entry.default or t('config.default') }}"
+               {% if not may_edit %}disabled{% endif %}>
+      </div>
+      {% endfor %}
+    </div>
+    {% if may_edit %}
+    <div class="btn-row mt12">
+      <button class="btn btn-primary" type="submit">{{ t('config.panel.save') }}</button>
+    </div>
+    <p class="hint">{{ t('config.panel.hint') }}</p>
+    {% endif %}
+  </details>
+</form>
+{% if may_edit %}
+<form class="mt10" method="post" action="/panel/restart"
+      data-ask="{{ t('config.panel.restart.sure') }}">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <button class="btn btn-small btn-danger" type="submit">{{ t('config.panel.restart') }}</button>
+</form>
+{% endif %}
+{% endblock %}

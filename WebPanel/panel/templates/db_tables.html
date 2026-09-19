@@ -1,0 +1,57 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ t('db.title') }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('db.title') }}</h1>
+  <span class="spacer"></span>
+  <span class="sub">{{ tables | length }} {{ t('db.tables_suffix') }}</span>
+</div>
+
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if error %}<p class="flash flash-error">{{ t(error) }}</p>{% endif %}
+
+<div class="tile-grid">
+  {% for table in tables %}
+  <a class="tile" href="/db/{{ table.name }}">
+    <span class="tname mono">{{ table.name }}</span>
+    <span class="tmeta">{{ table.rows }} {{ t('db.rows_suffix') }}</span>
+  </a>
+  {% endfor %}
+</div>
+
+<div class="card col-12 mt16">
+  <h2>{{ t('db.backup.title') }}</h2>
+  <p class="hint">
+    {{ t('db.backup.lead') }}
+    {% if backup_at %}{{ t('db.backup.scheduled') }} {{ backup_at }} ({{ backup_kind }}) —{% endif %}
+    {{ t('db.backup.confighint') }}
+  </p>
+  {% if may_backup %}
+  <form class="my8" method="post" action="/db/backup">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn btn-primary" type="submit" {% if backup_busy %}disabled{% endif %}>
+      {{ t('db.backup.now') }}</button>
+    {% if backup_busy %}<span class="dim">{{ t('db.backup.running') }}</span>{% endif %}
+  </form>
+  {% endif %}
+  {% if db_backups %}
+  <table>
+    <thead><tr><th>{{ t('db.backup.name') }}</th><th>{{ t('db.backup.when') }}</th>
+      <th>{{ t('db.backup.size') }}</th></tr></thead>
+    <tbody>
+      {% for entry in db_backups %}
+      <tr>
+        <td class="mono">{% if may_backup %}<a href="/db/backup/{{ entry.name }}">{{ entry.name }}</a>
+            {% else %}{{ entry.name }}{% endif %}</td>
+        <td>{{ entry.when }}</td>
+        <td>{{ entry.size_mb }} MB</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="dim">{{ t('db.backup.none') }}</p>
+  {% endif %}
+</div>
+{% endblock %}

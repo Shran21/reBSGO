@@ -1,0 +1,115 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ t('console.title') }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('console.title') }}</h1>
+  <span class="spacer"></span>
+  <span class="sub">{{ t('console.as') }} <b>{{ session.name }}</b></span>
+</div>
+
+{% if not bridge_up %}<p class="flash flash-warn">{{ t('console.down') }}</p>{% endif %}
+{% if not is_developer %}<p class="hint m0-12">{{ t('console.no_dev') }}</p>{% endif %}
+
+<div class="card term col-12">
+  <div class="term-out" id="term-out" aria-live="polite"></div>
+  <form class="term-in" id="term-form" autocomplete="off">
+    <span class="term-prompt mono" aria-hidden="true">›</span>
+    <input class="mono" id="term-line" list="cmdlist" spellcheck="false"
+           placeholder="{{ t('console.placeholder') }}" autofocus>
+    <datalist id="cmdlist">
+      {% for name in commands %}<option value="{{ name }}"></option>{% endfor %}
+    </datalist>
+    <button class="btn btn-primary" type="submit">{{ t('console.run') }}</button>
+  </form>
+  <p class="hint">{{ t('console.hint') }}</p>
+</div>
+
+<details class="card col-12 cfgbox mt14">
+  <summary>{{ t('console.manual') }} <span class="dim">· {{ manual | length }}</span></summary>
+  <input class="maxw280 my12" type="search" id="man-filter" placeholder="{{ t('db.search') }}">
+  <div class="scroll-x">
+    <table id="man-table">
+      <thead><tr><th>{{ t('console.cmd') }}</th><th>{{ t('console.args') }}</th>
+        <th>{{ t('console.what') }}</th></tr></thead>
+      <tbody>
+        {% for entry in manual %}
+        <tr>
+          <td class="mono">{{ entry.name }}</td>
+          <td class="mono dim">{{ entry.args }}</td>
+          <td>{{ entry.text or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
+<script>
+(function () {
+  var filter = document.getElementById("man-filter");
+  var rows = document.querySelectorAll("#man-table tbody tr");
+  filter.addEventListener("input", function () {
+    var needle = filter.value.toLowerCase();
+    rows.forEach(function (row) {
+      row.style.display = row.textContent.toLowerCase().indexOf(needle) >= 0 ? "" : "none";
+    });
+  });
+})();
+</script>
+
+<script>
+(function () {
+  var CSRF = "{{ csrf }}";
+  var out = document.getElementById("term-out");
+  var form = document.getElementById("term-form");
+  var field = document.getElementById("term-line");
+  var DOWN_TEXT = {{ t('console.down') | tojson }};
+  var history = [];
+  try { history = JSON.parse(localStorage.getItem("panel_console_history") || "[]"); }
+  catch (e) { history = []; }
+  var cursor = history.length;
+
+  function append(text, kind) {
+    var row = document.createElement("div");
+    row.className = "term-row" + (kind ? " " + kind : "");
+    row.textContent = text;
+    out.appendChild(row);
+    out.scrollTop = out.scrollHeight;
+  }
+
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    var line = field.value.trim();
+    if (!line) { return; }
+    field.value = "";
+    history.push(line);
+    if (history.length > 100) { history = history.slice(-100); }
+    try { localStorage.setItem("panel_console_history", JSON.stringify(history)); } catch (e) {}
+    cursor = history.length;
+    append("› " + line, "cmd");
+    var body = new URLSearchParams();
+    body.set("csrf", CSRF);
+    body.set("line", line);
+    fetch("/console/run", { method: "POST", body: body })
+      .then(function (response) { return response.json(); })
+      .then(function (data) {
+        if (data.down) { append(DOWN_TEXT, "err"); return; }
+        (data.lines || []).forEach(function (sor) {
+          append(sor, data.ok ? "" : "err");
+        });
+      })
+      .catch(function () { append(DOWN_TEXT, "err"); });
+  });
+
+  field.addEventListener("keydown", function (event) {
+    if (event.key === "ArrowUp") {
+      if (cursor > 0) { cursor -= 1; field.value = history[cursor] || ""; }
+      event.preventDefault();
+    } else if (event.key === "ArrowDown") {
+      if (cursor < history.length) { cursor += 1; field.value = history[cursor] || ""; }
+      event.preventDefault();
+    }
+  });
+})();
+</script>
+{% endblock %}

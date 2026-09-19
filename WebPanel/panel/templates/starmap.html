@@ -1,0 +1,37 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ t('map.title') }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('map.title') }}</h1>
+  <span class="spacer"></span>
+  {% if not live %}<span class="sub">{{ t('sectors.cold') }}</span>{% endif %}
+</div>
+
+<div data-refresh="10">
+<div class="card col-12 mapcard">
+  <svg viewBox="0 0 {{ width }} {{ height }}" class="starmap" role="img"
+       aria-label="{{ t('map.title') }}">
+    {% for star in stars %}
+    <a href="/sectors?sort=name#s{{ star.id }}">
+      <g class="star {% if star.closed %}closed{% elif star.players %}busy{% endif %}"
+         transform="translate({{ star.x }} {{ star.y }})">
+        <title>{{ star.name }} (#{{ star.id }})
+{{ t('sectors.players') }}: {{ star.players }}{% if star.names %} — {{ star.names }}{% endif %}
+NPC: {{ star.npcs }}{% if star.outposts %} · OP: {{ star.outposts | join('/') }}{% endif %}{% if star.beacons %} · ⚓{{ star.beacons }}{% endif %}{% if star.closed %}
+{{ t('map.closed') }}{% endif %}</title>
+        <circle class="dotring" r="{{ star.radius + 4 }}"/>
+        <circle class="dot" r="{{ star.radius }}"/>
+        {% if star.players %}<text class="pcount" y="1">{{ star.players }}</text>{% endif %}
+        {% if star.outposts or star.beacons %}
+        <text class="flags" y="-{{ star.radius + 8 }}">{{ star.outposts | join('') }}{% if star.beacons %}⚓{% endif %}</text>
+        {% endif %}
+        <text class="sname" y="{{ star.radius + 15 }}">{{ star.name }}</text>
+      </g>
+    </a>
+    {% endfor %}
+  </svg>
+</div>
+</div>
+<p class="hint">{{ t('map.hint') }}</p>
+{% endblock %}

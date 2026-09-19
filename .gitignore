@@ -1,0 +1,12 @@
+# github.com/Shran21
+__pycache__/
+*.py[cod]
+.pytest_cache/
+runtime/
+cache/
+logs/
+sqlite/
+.env
+WebPanel/venv/
+WebPanel/panel.env
+WebPanel/logs/

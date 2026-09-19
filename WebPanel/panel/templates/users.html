@@ -1,0 +1,87 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ t('users.title') }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('users.title') }}</h1>
+  <span class="spacer"></span>
+  <span class="sub">{{ pilots | length }} {{ t('users.count_suffix') }}{% if q %} · {{ t('users.filtered') }}{% endif %}</span>
+</div>
+
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if error %}<p class="flash flash-error">{{ t(error) }}</p>{% endif %}
+
+{% if may_create %}
+<details class="card col-12 newbox">
+  <summary>+ {{ t('account.new') }}</summary>
+  <form class="logbar m14-0" method="post" action="/users/new" autocomplete="off">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input name="name" required minlength="2" maxlength="24"
+           placeholder="{{ t('account.name') }}">
+    <select name="faction">
+      <option value="0">{{ t('account.faction.pick') }}</option>
+      <option value="1">{{ t('faction.colonial') }}</option>
+      <option value="2">{{ t('faction.cylon') }}</option>
+    </select>
+    <input name="password" type="password" required minlength="6"
+           placeholder="{{ t('login.password') }}">
+    <button class="btn btn-primary" type="submit">{{ t('account.create') }}</button>
+  </form>
+  <p class="hint">{{ t('account.hint') }}</p>
+</details>
+{% endif %}
+
+<form class="filterbar" method="get" action="/users">
+  <input type="search" name="q" value="{{ q }}" placeholder="{{ t('users.search') }}"
+         aria-label="{{ t('users.search') }}">
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="desc" value="{{ desc }}">
+  <button class="btn" type="submit">{{ t('db.search') | replace('…', '') }}</button>
+  {% if q %}<a class="btn" href="/users">{{ t('users.clear') }}</a>{% endif %}
+</form>
+
+<div class="card table-card col-12" data-refresh="10">
+  <div class="scroll-x">
+    <table class="cardable">
+      <thead>
+        <tr>
+          {% macro rendezo(kulcs, cimke) -%}
+          <a href="/users?q={{ q | urlencode }}&sort={{ kulcs }}&desc={{ 0 if (sort == kulcs and desc) else (1 if sort == kulcs else 0) }}">
+            {{- cimke }}{% if sort == kulcs %} <span class="sortmark">{{ '↓' if desc else '↑' }}</span>{% endif %}</a>
+          {%- endmacro %}
+          <th>{{ rendezo('id', t('users.id')) }}</th>
+          <th>{{ rendezo('name', t('users.name')) }}</th>
+          <th>{{ t('users.faction') }}</th>
+          <th>{{ t('users.roles') }}</th>
+          <th>{{ t('users.password') }}</th>
+          <th>{{ rendezo('last_seen', t('users.last_seen')) }}</th>
+          <th class="num">{{ rendezo('online', t('users.sort.online')) }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for pilot in pilots %}
+        <tr class="rowlink" tabindex="0" data-href="/users/{{ pilot.id }}">
+          <td class="mono dim celltiny" data-label="{{ t('users.id') }}">{{ pilot.id }}</td>
+          <td class="cardhead">
+            <strong>{{ pilot.name }}</strong>
+            {% if pilot.is_online %}<span class="badge badge-ok">{{ t('users.online') }}{% if pilot.online_sector %} · {{ pilot.online_sector }}{% endif %}</span>{% endif %}
+            {% if pilot.is_banned %}<span class="badge badge-err">{{ t('ban.badge') }}</span>{% endif %}
+          </td>
+          <td data-label="{{ t('users.faction') }}">{{ t(pilot.faction_key) }}</td>
+          <td data-label="{{ t('users.roles') }}">
+            {% for role in pilot.role_names %}<span class="badge">{{ role }}</span>{% endfor %}
+          </td>
+          <td data-label="{{ t('users.password') }}">{% if pilot.has_password %}<span class="badge badge-accent">{{ t('users.password.yes') }}</span>
+              {% else %}<span class="dim">{{ t('users.password.no') }}</span>{% endif %}</td>
+          <td class="mono dim" data-label="{{ t('users.last_seen') }}">{{ pilot.last_seen or '—' }}</td>
+          <td class="num go" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

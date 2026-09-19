@@ -1,0 +1,116 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ t('sectors.title') }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('sectors.title') }}</h1>
+  <span class="spacer"></span>
+  {% if not live %}<span class="sub">{{ t('sectors.cold') }}</span>{% endif %}
+</div>
+
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if error %}<p class="flash flash-error">{{ t(error) }}{% if detail %} <span class="mono">{{ detail }}</span>{% endif %}</p>{% endif %}
+
+{% if may_operate %}
+<form id="policyform" method="post" action="/sectors/policy">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+</form>
+{% endif %}
+
+<div class="card table-card col-12" data-refresh="10">
+  <div class="scroll-x">
+    <table class="cardable compact sectors-table">
+      <thead>
+        <tr>
+          {% macro rendezo(kulcs, cimke) -%}
+          <a href="/sectors?sort={{ kulcs }}&desc={{ 0 if (sort == kulcs and desc) else (1 if sort == kulcs else 0) }}">
+            {{- cimke }}{% if sort == kulcs %} <span class="sortmark">{{ '↓' if desc else '↑' }}</span>{% endif %}</a>
+          {%- endmacro %}
+          <th>{{ rendezo('name', t('sectors.sector')) }}</th>
+          <th class="num">{{ rendezo('players', t('sectors.players')) }}</th>
+          <th class="num">{{ rendezo('npcs', 'NPC') }}</th>
+          <th class="num">{{ rendezo('asteroids', t('sectors.asteroids')) }}</th>
+          <th class="num">{{ rendezo('total', t('sectors.objects')) }}</th>
+          <th class="num">OP</th>
+          {% if may_operate %}
+          <th>{{ t('sectors.limit') }}</th>
+          <th>{{ t('sectors.closed') }}</th>
+          <th>{{ t('sectors.actions') }}</th>
+          {% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr id="s{{ row.id }}" {% if row.disabled %}class="rowoff"{% endif %}>
+          <td class="cardhead"><b>{{ row.name }}</b> <span class="dim mono">#{{ row.id }}</span></td>
+          <td class="num" data-label="{{ t('sectors.players') }}">
+            {% if row.players %}<span class="badge badge-ok">{{ row.players }}</span>
+              <span class="dim pnames" title="{{ row.names | join(', ') }}">{{ row.names | join(', ') }}</span>
+            {% else %}<span class="dim">0</span>{% endif %}
+          </td>
+          <td class="num mono" data-label="NPC">{{ row.npcs if row.npcs is defined else '—' }}</td>
+          <td class="num mono" data-label="{{ t('sectors.asteroids') }}">{{ row.asteroids if row.asteroids is defined else '—' }}</td>
+          <td class="num mono" data-label="{{ t('sectors.objects') }}">{{ row.total if row.total is defined else '—' }}</td>
+          <td class="num mono" data-label="OP">{% if row.op_colonial is defined %}{{ row.op_colonial }} / {{ row.op_cylon }}{% else %}—{% endif %}
+            <div class="opflags" title="{{ t('sectors.op.flags') }}">OP {% if row.op_colonial_may %}<b>K</b>{% else %}–{% endif %}/{% if row.op_cylon_may %}<b>C</b>{% else %}–{% endif %}
+              · B {% if row.beacon_colonial_may %}<b>K</b>{% else %}–{% endif %}/{% if row.beacon_cylon_may %}<b>C</b>{% else %}–{% endif %}{% if row.beacons %} · <b>⚓{{ row.beacons }}</b>{% endif %}</div>
+            {% for op in row.outpost_hp or [] %}
+            <div class="opflags">{{ 'K' if op.faction == 'Colonial' else 'C' }}:
+              {{ '{:,}'.format(op.hp | int).replace(',', ' ') }} / {{ '{:,}'.format(op.max | int).replace(',', ' ') }}</div>
+            {% endfor %}</td>
+          {% if may_operate %}
+          <td data-label="{{ t('sectors.limit') }}"><input form="policyform" name="limit_{{ row.id }}" value="{{ row.limit }}"
+                     inputmode="numeric" pattern="[0-9]*" class="tinyin"
+                     aria-label="{{ t('sectors.limit') }} {{ row.name }}"></td>
+          <td data-label="{{ t('sectors.closed') }}"><input form="policyform" type="checkbox" name="disabled_{{ row.id }}"
+                     {% if row.disabled %}checked{% endif %}
+                     aria-label="{{ t('sectors.closed') }} {{ row.name }}"></td>
+          <td class="actcell">
+            <form class="inline" method="post" action="/sectors/{{ row.id }}/event">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="btn btn-small" type="submit" {% if not live %}disabled{% endif %}>
+                {{ t('sectors.event') }}</button>
+            </form>
+            <form class="inline" method="post" action="/sectors/{{ row.id }}/restart"
+                  data-ask="{% if row.players %}{{ t('sectors.restart.warn') }} {{ row.names | join(', ') }}{% else %}{{ t('sectors.restart.sure') }}{% endif %}">
+              <input type="hidden" name="csrf" value="{{ csrf }}">
+              <button class="btn btn-small btn-danger" type="submit" {% if not live %}disabled{% endif %}>
+                {{ t('sectors.restart') }}</button>
+            </form>
+            {% if row.op_colonial_may or row.op_cylon_may %}
+            <details class="opbox">
+              <summary class="btn btn-small">OP</summary>
+              <form method="post" action="/sectors/{{ row.id }}/op" class="oprow">
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <select name="faction">
+                  {% if row.op_colonial_may %}<option value="colonial">{{ t('faction.colonial') }}</option>{% endif %}
+                  {% if row.op_cylon_may %}<option value="cylon">{{ t('faction.cylon') }}</option>{% endif %}
+                </select>
+                <input name="points" value="500" inputmode="numeric" class="tinyin"
+                       aria-label="OP" title="{{ t('sectors.op.range') }}">
+                <button class="btn btn-small" type="submit" {% if not live %}disabled{% endif %}>±</button>
+                <button class="btn btn-small" type="submit" name="points" value="3000"
+                        {% if not live %}disabled{% endif %}>{{ t('sectors.op.max') }}</button>
+              </form>
+            </details>
+            {% else %}
+            <span class="dim" title="{{ t('sectors.op.forbidden') }}">—</span>
+            {% endif %}
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if may_operate and sealed %}
+<p class="flash flash-warn mt14">{{ t('sectors.policy.sealed') }}</p>
+{% elif may_operate %}
+<div class="btn-row mt14">
+  <button class="btn btn-primary" type="submit" form="policyform">{{ t('sectors.policy.save') }}</button>
+</div>
+<p class="hint">{{ t('sectors.policy.hint') }}</p>
+{% endif %}
+{% endblock %}

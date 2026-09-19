@@ -1,0 +1,62 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ table }} #{{ rid if rid is not none else '+' }} · {{ t('db.title') }}{% endblock %}
+{% block content %}
+<p class="m0-8"><a class="backlink" href="/db/{{ table }}">← {{ t('db.back_table') }} <span class="mono">{{ table }}</span></a></p>
+<div class="page-head">
+  <h1 class="mono">{{ table }}{% if rid is not none %} <span class="dim">#{{ rid }}</span>{% endif %}</h1>
+  <span class="spacer"></span>
+  {% if rid is none %}<span class="sub">{{ t('db.row.new') }}</span>{% endif %}
+</div>
+
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if error %}<p class="flash flash-error">{{ t(error) }}{% if detail %} <span class="mono">{{ detail }}</span>{% endif %}</p>{% endif %}
+{% if locked %}<p class="flash flash-warn">{{ t('db.online_locked') }}</p>{% endif %}
+
+<div class="card col-12">
+  <form method="post" action="/db/{{ table }}/{{ rid if rid is not none else 'new' }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <div class="fieldlist">
+      {% for field in fields %}
+      <div class="fieldrow">
+        <div class="fmeta">
+          <span class="fname mono">{{ field.name }}</span>
+          <span class="ftype">{{ field.type }}{% if field.pk %} · pk{% endif %}</span>
+        </div>
+        {% if field.blob %}
+          <p class="dim m0">‹blob {{ field.blob_size }} B› — {{ t('db.row.blob') }}</p>
+        {% else %}
+          {% if field.long %}
+            <textarea name="value_{{ field.name }}" rows="4"
+                      {% if not may_edit or locked %}disabled{% endif %}>{{ field.value }}</textarea>
+          {% else %}
+            <input name="value_{{ field.name }}" value="{{ field.value }}"
+                   {% if not may_edit or locked %}disabled{% endif %}>
+          {% endif %}
+          <label class="nullbox">
+            <input type="checkbox" name="null_{{ field.name }}"
+                   {% if field.null %}checked{% endif %}
+                   {% if not may_edit or locked %}disabled{% endif %}>
+            <span>{{ t('db.row.null') }}</span>
+          </label>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% if may_edit and not locked %}
+      <div class="btn-row">
+        <button class="btn btn-primary" type="submit">
+          {{ t('db.row.insert') if rid is none else t('db.row.save') }}</button>
+      </div>
+      <p class="hint">{{ t('db.row.null_hint') }}</p>
+    {% endif %}
+  </form>
+  {% if may_edit and not locked and rid is not none %}
+  <form class="mt10" method="post" action="/db/{{ table }}/{{ rid }}/delete"
+        data-ask="{{ t('db.row.confirm') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn btn-danger" type="submit">{{ t('db.row.delete') }}</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}

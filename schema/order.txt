@@ -1,0 +1,31 @@
+# github.com/Shran21
+# Milyen sorrendben épül fel az adatbázis.
+#
+# A sorrend itt van leírva, nem a fájlnevekben. Így egy lépés átnevezhető
+# anélkül, hogy a számozás felborulna, és egy pillantással látszik, mi épül
+# mire - a könyvtárlistából ez sosem derülne ki.
+#
+# Egy lépés pontosan egyszer fut le, és a neve kerül be a nyilvántartásba.
+# Aki új lépést ír, a lista VÉGÉRE tegye: a fölötte lévők már lefutottak
+# azokon a szervereken, amik eddig is éltek.
+#
+# Az üres sorok és a kettőskereszttel kezdődők nem számítanak.
+
+base-tables
+containers
+guilds
+hangar
+last-known-position
+client-settings
+skill-book
+finished-tutorials
+repair-cylon-stealth
+repair-cylon-war-raider
+chosen-consumable-per-slot
+player-lookup-indexes
+pilot-passwords
+friends
+ranking-snapshots
+panel-bans
+guild-rank-names-localized
+daily-login-streak

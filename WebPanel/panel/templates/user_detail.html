@@ -1,0 +1,158 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ pilot.name }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<p class="m0-8"><a class="backlink" href="/users">← {{ t('user.back') }}</a></p>
+<div class="page-head">
+  <h1>{{ pilot.name }}</h1>
+  <span class="sub mono">#{{ pilot.id }}</span>
+  {% if is_online %}<span class="badge badge-ok">{{ t('users.online') }}{% if online_sector %} · {{ online_sector }}{% endif %}</span>{% endif %}
+  <span class="spacer"></span>
+  <span class="sub">{{ t(faction_key) }} · {{ t('users.last_seen') }}: <span class="mono">{{ pilot.last_seen or '—' }}</span></span>
+  {% if is_online and may_kick %}
+  <form class="m0" method="post" action="/users/{{ pilot.id }}/kick"
+        data-ask="{{ t('user.kick.confirm') }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn btn-small btn-danger" type="submit">{{ t('user.kick') }}</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if error %}<p class="flash flash-error">{{ t(error) }}</p>{% endif %}
+{% if ban %}<p class="flash flash-warn">{{ t('ban.live') }}
+  <span class="mono">{{ ban.until[:16] | replace('T', ' ') }}</span>
+  {% if ban.reason %}· {{ ban.reason }}{% endif %}
+  <span class="dim">({{ ban.by }})</span></p>{% endif %}
+
+<div class="grid">
+  <section class="card col-12">
+    <h2 class="card-title">{{ t('user.roles.title') }}</h2>
+    {% if is_online %}<p class="flash flash-warn">{{ t('user.roles.online_locked') }}</p>{% endif %}
+    <form method="post" action="/users/{{ pilot.id }}/roles">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="checkgrid">
+        {% for role in roles %}
+        <label class="check">
+          <input type="checkbox" name="role_{{ role.name }}"
+                 {% if role.worn %}checked{% endif %}
+                 {% if not may_edit_roles or is_online %}disabled{% endif %}>
+          <span>
+            <span class="rname">{{ role.name }} <span class="dim mono">{{ role.value }}</span></span>
+            <span class="rdesc">{{ t('role.desc.' ~ role.name) }}</span>
+          </span>
+        </label>
+        {% endfor %}
+      </div>
+      {% if may_edit_roles and not is_online %}
+        <button class="btn btn-primary" type="submit">{{ t('user.roles.save') }}</button>
+      {% endif %}
+    </form>
+  </section>
+
+  <section class="card col-8">
+    <h2 class="card-title">{{ t('user.resources.title') }}</h2>
+    {% if is_online %}<p class="flash flash-warn">{{ t('user.resources.online_locked') }}</p>{% endif %}
+    <form method="post" action="/users/{{ pilot.id }}/resources">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <div class="res-grid">
+        {% for res in resources %}
+        <div class="res">
+          <div class="rk">{{ t(res.key) }}</div>
+          <div class="rv">{{ '{:,}'.format(res.amount).replace(',', ' ') }}</div>
+          {% if may_edit_resources and not is_online %}
+            <input name="amount_{{ res.guid }}" inputmode="numeric" pattern="[0-9]*"
+                   value="{{ res.amount }}" aria-label="{{ t(res.key) }}">
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% if may_edit_resources and not is_online %}
+        <button class="btn btn-primary" type="submit">{{ t('user.resources.save') }}</button>
+        <p class="hint">{{ t('user.resources.hint') }}</p>
+      {% endif %}
+    </form>
+  </section>
+
+  <section class="card col-4">
+    <h2 class="card-title">{{ t('user.password.title') }}</h2>
+    {% if may_set_password %}
+    <form method="post" action="/users/{{ pilot.id }}/password" autocomplete="off">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="field">
+        <span>{{ t('user.password.new') }}</span>
+        <input name="password" type="password" minlength="6" required>
+      </label>
+      <button class="btn btn-primary" type="submit">{{ t('user.password.save') }}</button>
+    </form>
+    {% else %}
+    <p class="dim">{{ t('user.password.denied') }}</p>
+    {% endif %}
+  </section>
+
+  {% if logins %}
+  <section class="card col-4">
+    <h2 class="card-title">{{ t('user.logins') }}</h2>
+    <dl class="statlist">
+      {% for entry in logins %}
+      <div><dt class="mono">{{ entry.day }} {{ entry.clock }}</dt>
+        <dd class="mono dim">{{ entry.origin }}</dd></div>
+      {% endfor %}
+    </dl>
+  </section>
+  {% endif %}
+
+  {% if tallies %}
+  <section class="card col-12">
+    <h2 class="card-title">{{ t('user.tallies') }}</h2>
+    <div class="res-grid">
+      {% for row in tallies %}
+      <div class="res">
+        <div class="rk">{{ row.name }}</div>
+        <div class="rv">{{ row.value }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if may_ban %}
+  <section class="card col-12">
+    <h2 class="card-title">{{ t('ban.title') }}</h2>
+    {% if ban %}
+    <form method="post" action="/users/{{ pilot.id }}/unban">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn btn-primary" type="submit">{{ t('ban.lift') }}</button>
+    </form>
+    {% else %}
+    <form class="logbar" method="post" action="/users/{{ pilot.id }}/ban"
+          data-ask="{{ t('ban.confirm') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <select name="length">
+        <option value="1h">{{ t('ban.h1') }}</option>
+        <option value="24h" selected>{{ t('ban.h24') }}</option>
+        <option value="7d">{{ t('ban.d7') }}</option>
+        <option value="30d">{{ t('ban.d30') }}</option>
+        <option value="forever">{{ t('ban.forever') }}</option>
+      </select>
+      <input name="reason" maxlength="200" placeholder="{{ t('ban.reason') }}">
+      <button class="btn btn-danger" type="submit">{{ t('ban.set_btn') }}</button>
+    </form>
+    <p class="hint">{{ t('ban.hint') }}</p>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if may_erase %}
+  <section class="card col-12 dangerbox">
+    <h2 class="card-title">{{ t('account.danger') }}</h2>
+    <p class="hint m0-12">{{ t('account.erase.hint') }}</p>
+    <form method="post" action="/users/{{ pilot.id }}/erase"
+          data-ask="{{ t('account.erase.confirm') }}">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn btn-danger" type="submit">{{ t('account.erase') }}</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

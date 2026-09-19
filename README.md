@@ -1,84 +1,145 @@
-# reBSGO Python Server
+[github.com/Shran21](https://github.com/Shran21)
 
-**Coming soon:** this repository contains a Python-based reimplementation of a **Battlestar Galactica Online** game server. The goal is to provide a server-side system that can communicate with the original Unity client and run the core multiplayer gameplay: login, galaxy navigation, sectors, movement, combat, NPCs, ships, inventory, shop, community systems and data-driven game content.
+# reBSGO
 
-This repository is being prepared for public release. It contains the server code and server-side data files only. The original client, client assets and third-party game files are not included.
+Magyar · [English](#english)
 
-### Technology
+**Battlestar Galactica Online** játékszerver Pythonban, az eredeti Unity-klienshez: a teljes szerveroldal, egy webes adminfelület és a játék indítója egy csomagban.
 
-- **Python 3.11+** is the main implementation language. The server is structured around Python packages for protocols, gameplay systems, sector simulation, persistence, templates and networking.
-- **SQLite** is used for persistent server state: player records, hangars, containers, guilds, missions, selected equipment and other account/gameplay data that must survive restarts.
-- **Custom TCP protocol layer** mirrors the original client protocol families. The project implements read/write protocol handling for login, game, player, universe, scene, shop, community, notification, ranking, arena and other client-facing systems.
-- **GameData JSON/template system** is the content backbone. Ships, weapons, modules, paints, NPCs, sectors, colliders, loot tables, missions, shop entries, carrier settings, outpost data and other gameplay content are loaded from data files instead of being hardcoded wherever possible.
-- **Threaded sector simulation** drives the real-time game world. Each active sector processes movement, collision, combat, NPC logic, timers, object visibility, state/property updates and outgoing broadcasts.
-- **Spatial indexing and hotpath optimization** are used for high-object-count sectors. Uniform grid / spatial hash based candidate filtering reduces full object scans in collision, NPC targeting, missiles, mines, damage areas and ability effects.
-- **Rust/PyO3 native hotpath** accelerates CPU-heavy operations such as radius filtering, distance checks, spatial candidate generation, future position calculations and packet-oriented helper paths.
-- **Performance guardrails and diagnostics** provide switchable logging for slow ticks, sender queues, player input latency, GameData loading, database operations and sector hotpath summaries.
+Nem hivatalos projekt, és nem áll kapcsolatban az eredeti jogtulajdonosokkal. A kliens és a kliens fájljai nem részei a repónak.
 
-### Implemented Highlights
+## Telepítés
 
-- **Login, sessions and player state:** account/session flow, player profile data, hangar state, inventory/container handling, resources, selected consumables and persistent save/load paths.
-- **Galaxy and sector flow:** galaxy map state, sector entry, scene transitions, jump handling, group jumps, beacon jumps, carrier transponders and sector object synchronization.
-- **Real-time movement:** speed and gear handling, WASD/QWEASD-style movement commands, movement frame updates, out-of-sector checks, position broadcasts and player input prioritization.
-- **Combat and abilities:** cannon fire, missiles, mines, flares, AoE effects, buffs/debuffs, stealth, fortify, slide, shrapnel, toggle systems, target updates and deterministic damage application.
-- **NPC systems:** static and dynamic NPC spawning, target selection, AI timers, combat participation, loot/drop generation and cleanup logic.
-- **Mining and resources:** mining actions, resource scanning, asteroid and planetoid resource spawning, mining ship behavior and related NPC interactions.
-- **Outposts and sector control:** outpost spawning, readiness/decrease logic, beacons, platforms, HP bonuses and sector-level state updates.
-- **Carrier and capital ship support:** carrier/base mode, anchoring, unanchoring, launch strikes, T1 docking/anchoring behavior, carrier transponder logic and capital ship map/visibility support.
-- **Shop, catalogue and ship content:** catalogue delivery, shop filtering, paints, ship upgrades, stealth ships, capital ship data and GameData-driven content expansion.
-- **Community and progression systems:** party, guild, friends/community, chat integration, rankings, arena, WOF, dialog, story, notifications and mission-related flows.
-- **Debug and operations:** admin/debug commands, test helpers, configurable diagnostics and performance guardrail logs for investigating high-load gameplay issues.
+    ./install.sh
 
-### Client Compatibility
+A telepítő megkérdezi a célmappát, a többit magától elvégzi: kibontja a csomagolt Python 3.13-at (rendszer-Python nem kell hozzá), ellenőrzi a natív gyorsítómodult, felépíti a panel környezetét, elkészíti a `.env`-et, végül telepíti és elindítja a `bsgo` és a `rebsgo-panel` szolgáltatást. Hálózati kapcsolat nélkül is végigfut.
 
-The server is designed around the original BSGO client protocol and asset expectations. In the current state, most core gameplay paths are implemented and usable server-side.
+| Szolgáltatás | Cím |
+|---|---|
+| beléptető ajtó, ide csatlakozik a launcher | `http://<a gép címe>:27051` |
+| játék, chat | 27050, 27052 |
+| WebPanel | `http://<a gép címe>:27055`, hálózati eléréshez `PANEL_HOST=0.0.0.0` |
+| beállítások | `.env`, a kulcsok katalógusa a `.env.example` |
 
-Rough functional estimate: **around 75-85% of the main client-facing gameplay features** are currently connected. This is not an exact asset-count metric; it is a practical gameplay estimate. The remaining work is mostly around rarer, legacy, event-specific or partially implemented client systems, such as some market/battlespace/tournament-style flows and edge cases.
+Bővebben: [telepítés és mentés](docs/hu/szerver-admin/mentes-telepites.md).
 
-<img width="1891" height="979" alt="Képernyőkép 2026-07-08 181313" src="https://github.com/user-attachments/assets/d8c49627-fe6b-49d4-9c67-1631577aced2" />
-<img width="1896" height="988" alt="Képernyőkép 2026-07-08 181006" src="https://github.com/user-attachments/assets/3a986784-b3c6-45f1-966b-191535433311" />
+## A repó tartalma
 
-### Status
+| Mappa | Tartalom |
+|---|---|
+| `src/rebsgo/` | a szerver: protokollok, szektor-szimuláció, játékmenet, adattárolás |
+| `GameData/` | a játék adatai |
+| `WebPanel/` | a webes adminfelület |
+| `launcher/` | a játék indítója |
+| `docs/` | a dokumentációk |
+| `tools/` | fiókkezelés és a launcher fájllistájának elkészítése |
+| `schema/`, `native/`, `vendor/` | adatbázis-séma, natív gyorsítómodul, csomagolt Python |
 
-The project is under active development and is NOT an official BSGO server. It is not affiliated with the original rights holders.
+## Launcher
+
+A `launcher/rebsgo-launcher.exe` egyetlen fájl, telepítés nélkül fut Windowson. Első indításkor a szerver címét és a játék mappáját kéri, a portot és a `bsgo.exe`-t magától megtalálja; regisztrálni és belépni is ezen keresztül lehet. A jelszó nem jut el a klienshez, az csak egy belépőjegyet kap. Ha az üzemeltető beállította a fájllistát, a launcher indítás előtt a szerverén lévő klienshez igazítja a játékosét: a hiányzót és az eltérőt letölti, törölni sosem töröl.
+
+Részletek: [a launcher leírása](docs/hu/launcher.md).
+
+## Dokumentáció
+
+A [`docs/`](docs/README.md) mappában, magyarul és angolul, ugyanazokkal az oldalakkal.
+
+| Témakör | Hol |
+|---|---|
+| üzemeltetés: indítás, naplók, fiókok, mentés, telepítés | [`szerver-admin/`](docs/hu/szerver-admin/README.md) |
+| WebPanel: belépés, fülek, beállítások, felépítés | [`webpanel/`](docs/hu/webpanel/README.md) |
+| a fejlesztői konzol parancsai | [`devconsole/`](docs/hu/devconsole/README.md) |
+| a játék indítója | [`launcher.md`](docs/hu/launcher.md) |
+
+## Technológia
+
+Python 3.13, a csomag hozza magával; a szerver a standard könyvtárra épül. Az adatok SQLite-ban laknak, a forró útvonalakon Rust/PyO3 natív modul gyorsít, lefordítva a fában. A WebPanel FastAPI-ra épül. A játéktartalom JSON-sablonokból jön, nem a kódból. A viselkedést a fejlesztés során pytest-készletek fedik: protokoll, játékszabályok, teljesítmény.
+
+## Kapcsolat
+
+- Projektoldal: <https://github.com/Shran21/reBSGO>
+- Discord: <https://discord.com/users/469848422732660767>
+
+A launcher alsó sávjának **WEBOLDAL** és **KAPCSOLAT** hivatkozása ugyanide visz.
+
+## Licenc
+
+A szerver az **AGPL-3.0-or-later** feltételei szerint használható; a teljes szöveg a [LICENSE](LICENSE) fájlban. Ez hálózati szolgáltatásra is kiterjed: aki a szervert üzemelteti és módosítja, a módosított forrást elérhetővé kell tegye a játékosainak. A csomagban utazó idegen komponensek (Python, wheel-ek, betűtípusok, natív modul, launcher) saját licencüket viszik — a felsorolás a [NOTICE](NOTICE) fájlban.
+
+## Állapot
+
+Aktív fejlesztés alatt. Működik a belépés és a fiókkezelés, a galaxis és a szektorok, a mozgás, a harc és a képességek, az NPC-k, a bányászat, a támaszpontok, a hordozók és a capital hajók, a bolt, a közösségi rendszerek (párt, kötelék, chat), a ranglisták, az aréna, a küldetések és a napi bónusz. Hátravan néhány ritkább, esemény-jellegű kliensrendszer.
 
 ---
 
-**Hamarosan:** ez a repository a **Battlestar Galactica Online** játékszerver Python-alapú újraimplementációját tartalmazza. A cél egy olyan szerveroldali rendszer, amely képes kommunikálni az eredeti Unity klienssel, és futtatni a fő multiplayer játékmenetet: belépés, galaxisnavigáció, szektorok, mozgás, harc, NPC-k, hajók, inventory, shop, közösségi rendszerek és adatvezérelt játéktartalom.
+## English
 
-A repository jelenleg publikus megjelenésre készül. Csak a szerverkódot és a szerveroldali adatfájlokat tartalmazza. Az eredeti kliens, kliens assetek és harmadik féltől származó játékfájlok nem részei a projektnek.
+English · [Magyar](#rebsgo)
 
-### Technológia
+A **Battlestar Galactica Online** game server in Python for the original Unity client: the full server side, a web admin interface and the game's launcher in one package.
 
-- **Python 3.11+** a fő implementációs nyelv. A szerver Python csomagokra épül protokollokhoz, gameplay rendszerekhez, szektor-szimulációhoz, perzisztenciához, template-kezeléshez és hálózati kommunikációhoz.
-- **SQLite** tárolja a perzisztens szerverállapotot: játékosadatokat, hangart, containereket, guildeket, mission állapotokat, kiválasztott felszereléseket és egyéb restart után is megmaradó gameplay adatokat.
-- **Saját TCP protokollréteg** igazodik az eredeti kliens protokollcsaládjaihoz. A projekt kezel login, game, player, universe, scene, shop, community, notification, ranking, arena és több más kliensoldali protokollágat.
-- **GameData JSON/template rendszer** adja a tartalmi alapot. Hajók, fegyverek, modulok, festések, NPC-k, szektorok, colliderek, loot táblák, missionök, shop elemek, carrier beállítások, outpost adatok és egyéb gameplay tartalmak adatfájlokból töltődnek be, ahol csak lehet hardcode helyett.
-- **Threadelt szektor-szimuláció** futtatja a valós idejű játékteret. Az aktív szektorok mozgást, collisiont, harcot, NPC logikát, timereket, objektum-láthatóságot, state/property frissítéseket és kimenő broadcastokat dolgoznak fel.
-- **Spatial index és hotpath optimalizáció** segíti a sok objektumot tartalmazó szektorokat. Uniform grid / spatial hash alapú candidate szűrés csökkenti a teljes objektumlista-végigjárásokat collision, NPC target keresés, rakéták, aknák, damage area és ability effektek esetén.
-- **Rust/PyO3 native hotpath** gyorsítja a CPU-igényes részeket, például radius szűrést, távolságellenőrzést, spatial candidate generálást, jövőbeli pozíciószámítást és packet-közeli segédútvonalakat.
-- **Teljesítmény guardrail és diagnosztika** kapcsolható logolást ad lassú tickekhez, sender queue-khoz, player input késéshez, GameData betöltéshez, adatbázis műveletekhez és szektor hotpath összegzésekhez.
+An unofficial project, not affiliated with the original rights holders. The client and its files are not part of the repository.
 
-### Megvalósított főbb elemek
+### Installation
 
-- **Login, session és játékosállapot:** account/session folyamatok, játékosprofil, hangar állapot, inventory/container kezelés, erőforrások, kiválasztott consumable állapotok és perzisztens mentési/betöltési útvonalak.
-- **Galaxy és szektorfolyamatok:** galaxy map állapot, szektorbelépés, scene váltás, jump kezelés, group jump, beacon jump, carrier transponder és szektorobjektum-szinkronizáció.
-- **Valós idejű mozgás:** speed és gear kezelés, WASD/QWEASD jellegű movement parancsok, movement frame frissítések, out-of-sector ellenőrzések, pozíció broadcast és player input prioritás.
-- **Harc és ability-k:** cannon lövés, rakéták, aknák, flare, AoE effektek, buff/debuff, stealth, fortify, slide, shrapnel, toggle rendszerek, target update-ek és determinisztikus damage alkalmazás.
-- **NPC rendszerek:** statikus és dinamikus NPC spawn, célválasztás, AI timerek, combat részvétel, loot/drop generálás és cleanup logika.
-- **Bányászat és erőforrások:** mining actionök, resource scan, asteroid és planetoid resource spawn, mining ship működés és kapcsolódó NPC interakciók.
-- **Outpost és szektorkontroll:** outpost spawn, readiness/decrease logika, beaconök, platformok, HP bonuszok és szintű szektorállapot-frissítések.
-- **Carrier és capital ship támogatás:** carrier/base mode, anchor, unanchor, launch strikes, T1 dock/anchor viselkedés, carrier transponder logika és capital ship map/láthatósági támogatás.
-- **Shop, catalogue és hajótartalom:** catalogue kiszolgálás, shop szűrés, festések, hajófejlesztés, stealth hajók, capital ship adatok és GameData-alapú tartalombővítés.
-- **Közösségi és progression rendszerek:** party, guild, friend/community, chat integráció, ranking, arena, WOF, dialog, story, notification és mission jellegű folyamatok.
-- **Debug és üzemeltetés:** admin/debug parancsok, tesztelési segédek, kapcsolható diagnosztika és teljesítmény guardrail logok nagy terhelésű gameplay helyzetek vizsgálatához.
+    ./install.sh
 
-### Kliens-kompatibilitás
+The installer asks for the target directory and does the rest on its own: it unpacks the bundled Python 3.13 (no system Python needed), checks the native accelerator module, builds the panel's environment, writes `.env`, then installs and starts the `bsgo` and `rebsgo-panel` services. It runs through without a network connection.
 
-A szerver az eredeti BSGO kliens protokolljaihoz és asset-elvárásaihoz igazodik. A jelenlegi állapotban a fő játékmeneti utak többsége szerveroldalon megvalósított és használható.
+| Service | Address |
+|---|---|
+| admission door, where the launcher connects | `http://<the machine's address>:27051` |
+| game, chat | 27050, 27052 |
+| WebPanel | `http://<the machine's address>:27055`, set `PANEL_HOST=0.0.0.0` for network access |
+| settings | `.env`, with every key catalogued in `.env.example` |
 
-Gyakorlati becslés szerint a fő kliensoldali gameplay funkciók **kb. 75-85%-a** jelenleg be van kötve. Ez nem pontos asset-darabszám, hanem funkcionális becslés; a maradék főleg ritkább, legacy, event-jellegű vagy részben megvalósított kliensrendszerekhez kötődik, például egyes market/battlespace/tournament jellegű folyamatokhoz és edge case-ekhez.
+More on this: [installation and backups](docs/en/server-admin/backup-install.md).
 
-### Állapot
+### What the repository holds
 
-A projekt aktív fejlesztés alatt áll, és NEM hivatalos BSGO szerver. Nem áll kapcsolatban az eredeti jogtulajdonosokkal.
+| Directory | Contents |
+|---|---|
+| `src/rebsgo/` | the server: protocols, sector simulation, gameplay, storage |
+| `GameData/` | the game's data |
+| `WebPanel/` | the web admin interface |
+| `launcher/` | the game's launcher |
+| `docs/` | the documentation |
+| `tools/` | account management and building the launcher's file list |
+| `schema/`, `native/`, `vendor/` | database schema, native accelerator module, bundled Python |
+
+### Launcher
+
+`launcher/rebsgo-launcher.exe` is a single file that runs on Windows without installation. On the first start it asks for the server's address and the game folder, finding the port and `bsgo.exe` by itself; registration and sign-in go through it as well. The password never reaches the client, which receives a ticket instead. When the operator has set up the file list, the launcher aligns the player's client with the one on the server before starting: it downloads what is missing or different, and never deletes.
+
+Details: [the launcher's write-up](docs/en/launcher.md).
+
+### Documentation
+
+In the [`docs/`](docs/README.md) directory, in English and Hungarian, with the same pages in both.
+
+| Subject | Where |
+|---|---|
+| operations: starting, logs, accounts, backups, installation | [`server-admin/`](docs/en/server-admin/README.md) |
+| WebPanel: signing in, tabs, settings, internals | [`webpanel/`](docs/en/webpanel/README.md) |
+| the developer console's commands | [`devconsole/`](docs/en/devconsole/README.md) |
+| the game's launcher | [`launcher.md`](docs/en/launcher.md) |
+
+### Technology
+
+Python 3.13, bundled with the package; the server is built on the standard library. Data lives in SQLite, and a Rust/PyO3 native module speeds up the hot paths, prebuilt in the tree. The WebPanel is built on FastAPI. Game content comes from JSON templates rather than from code. Behaviour is covered by pytest suites during development: protocol, game rules, performance.
+
+### Contact
+
+- Project page: <https://github.com/Shran21/reBSGO>
+- Discord: <https://discord.com/users/469848422732660767>
+
+The **WEBOLDAL** and **KAPCSOLAT** links along the bottom of the launcher lead to the same two places.
+
+### Licence
+
+The server is available under the terms of **AGPL-3.0-or-later**; the full text is in [LICENSE](LICENSE). It covers network use as well: whoever runs a modified server has to offer the modified source to its players. The third-party components that travel in the package (Python, the wheels, the typefaces, the native module, the launcher) keep their own licences, listed in [NOTICE](NOTICE).
+
+### Status
+
+Under active development. Working: sign-in and account management, the galaxy and its sectors, movement, combat and abilities, NPCs, mining, outposts, carriers and capital ships, the shop, the community systems (party, guild, chat), rankings, the arena, missions and the daily bonus. What remains is mostly the rarer, event-style client systems.

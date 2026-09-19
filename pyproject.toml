@@ -1,0 +1,16 @@
+# github.com/Shran21
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rebsgo"
+version = "1.0.0"
+description = "reBSGO - játékszerver a Battlestar Galactica Online klienshez"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+["src"]
+testpaths = ["tests"]

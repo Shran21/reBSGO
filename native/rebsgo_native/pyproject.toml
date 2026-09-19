@@ -1,0 +1,14 @@
+# github.com/Shran21
+[build-system]
+requires = ["maturin>=1.8,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "rebsgo-native"
+version = "0.1.0"
+requires-python = ">=3.11"
+description = "Native hot path helpers for rebsgo"
+
+[tool.maturin]
+module-name = "rebsgo_native"
+features = ["pyo3/extension-module"]

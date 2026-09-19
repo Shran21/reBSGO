@@ -1,0 +1,29 @@
+# github.com/Shran21
+[Unit]
+Description=reBSGO Game Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__ROOT__
+Environment=PYTHONPATH=src
+Environment=REBSGO_LOG_LEVEL=INFO
+Environment=REBSGO_LANG=__LANG__
+ExecStartPre=/bin/sh -c 'cd __ROOT__/logs 2>/dev/null || exit 0; \
+  [ -f server.log ] && mv server.log "server-$(date +%%Y%%m%%d-%%H%%M%%S).log"; \
+  ls -1t server-*.log 2>/dev/null | tail -n +11 | xargs -r rm -f; exit 0'
+ExecStart=__PYTHON__ -m rebsgo.main
+
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=3
+SuccessExitStatus=143
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bsgo
+
+[Install]
+WantedBy=multi-user.target

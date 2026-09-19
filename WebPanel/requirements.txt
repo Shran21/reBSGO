@@ -1,0 +1,7 @@
+# github.com/Shran21
+# Pinned to what the panel was built and tested against.
+fastapi==0.115.11
+uvicorn==0.32.0
+jinja2==3.1.6
+python-multipart==0.0.20
+psutil==7.0.0

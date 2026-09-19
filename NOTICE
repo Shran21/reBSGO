@@ -1,0 +1,79 @@
+reBSGO - third-party material
+github.com/Shran21
+
+The server itself is licensed under the GNU Affero General Public License,
+version 3 or later; see LICENSE. The components listed here come from other
+projects, ship inside this repository, and keep their own licences.
+
+----------------------------------------------------------------------------
+The interpreter
+
+  CPython 3.13.15                     Python Software Foundation License 2.0
+    vendor/python/cpython-3.13.15-x86_64-linux-gnu.tar.gz
+    A python-build-standalone distribution, unpacked by the installer into
+    runtime/ so the server runs on a machine with no Python of its own.
+
+----------------------------------------------------------------------------
+The web panel's Python packages (WebPanel/vendor/wheels)
+
+  annotated-types      0.8.0     MIT
+  anyio                4.14.2    MIT
+  click                8.4.2     BSD-3-Clause
+  fastapi              0.115.11  MIT
+  h11                  0.16.0    MIT
+  idna                 3.18      BSD-3-Clause
+  jinja2               3.1.6     BSD-3-Clause
+  markupsafe           3.0.3     BSD-3-Clause
+  psutil               7.0.0     BSD-3-Clause
+  pydantic             2.13.4    MIT
+  pydantic-core        2.46.4    MIT
+  python-multipart     0.0.20    Apache-2.0
+  starlette            0.46.2    BSD-3-Clause
+  typing-extensions    4.16.0    PSF-2.0
+  typing-inspection    0.4.4     MIT
+  uvicorn              0.32.0    BSD-3-Clause
+
+  Each wheel carries its own licence text inside it; the installer builds the
+  panel's environment from these files alone, without a network.
+
+----------------------------------------------------------------------------
+Typefaces
+
+  Geist and Geist Mono                SIL Open Font License 1.1
+    WebPanel/panel/static/fonts/ - the licence text sits beside the fonts in
+    GEIST-LICENSE.txt.
+
+----------------------------------------------------------------------------
+The native accelerator (native/)
+
+  Built with PyO3 against the bundled interpreter; the Rust source is in
+  native/rebsgo_native and the compiled module in native/lib. Its dependency
+  tree (pyo3, libc, once_cell, memoffset, target-lexicon, unindent and the
+  proc-macro crates around them - 21 packages, pinned in Cargo.lock) is
+  MIT or Apache-2.0 licensed, at the user's option.
+
+----------------------------------------------------------------------------
+The launcher (launcher/rebsgo-launcher.exe)
+
+  A Windows program built from Go with:
+
+    github.com/lxn/walk                 BSD-3-Clause
+    github.com/lxn/win                  BSD-3-Clause
+    golang.org/x/image, x/sys, x/text   BSD-3-Clause
+    gopkg.in/Knetic/govaluate.v3        MIT
+    the Go standard library             BSD-3-Clause
+
+  The binary is the same author's separate work and is shipped here for the
+  players' convenience; its source is not part of this repository, and it is
+  not covered by the repository's AGPL licence.
+
+  Its window is drawn after the game's own launcher, and carries artwork and
+  typefaces that belong to the game's rights holders, not to this project.
+
+----------------------------------------------------------------------------
+The game
+
+  Battlestar Galactica Online, its client, its assets and its names belong to
+  their rights holders. This is an unofficial project with no affiliation to
+  them. The client and its files are not part of this repository; the server
+  only speaks the protocol the client expects.

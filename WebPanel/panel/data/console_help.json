@@ -1,0 +1,255 @@
+{
+ "_comment": "Curated console help shown on the panel's console tab. hu/en pairs; args in <> are required, [] optional.",
+ "commands": {
+  "server.online": {
+   "args": "",
+   "hu": "Bent lévők száma frakciónként.",
+   "en": "Player count by faction."
+  },
+  "server.stop": {
+   "args": "",
+   "hu": "A játékszerver leállítása.",
+   "en": "Stops the game server."
+  },
+  "server.hull-census": {
+   "args": "",
+   "hu": "Hajótípusonkénti összeírás a bent lévőkről.",
+   "en": "Hull census of everyone online."
+  },
+  "server.hull-keys": {
+   "args": "",
+   "hu": "A négy nagy hajópár darabszáma.",
+   "en": "Counts of the four capital pairs."
+  },
+  "pilot.kick": {
+   "args": "<id>",
+   "hu": "Kirúgás azonosító szerint — udvarias kijelentkeztetéssel.",
+   "en": "Kick by id — with the clean logout screen."
+  },
+  "pilot.kick-for": {
+   "args": "<név>",
+   "hu": "Kirúgás név szerint.",
+   "en": "Kick by name."
+  },
+  "pilot.mute": {
+   "args": "<név> <óra>",
+   "hu": "Chat-némítás órákra.",
+   "en": "Chat mute for hours."
+  },
+  "pilot.role": {
+   "args": "<id> <bit>",
+   "hu": "Szerep-bitek állítása (csak az 1-es és 2-es fióknak jár).",
+   "en": "Set role bits (accounts 1 and 2 only)."
+  },
+  "pilot.role-for": {
+   "args": "<név> <bit>",
+   "hu": "Szerep-bitek név szerint.",
+   "en": "Role bits by name."
+  },
+  "pilot.faction": {
+   "args": "<név> <cubit?> <ár>",
+   "hu": "Frakcióváltás; a második arg dönt, cubitból megy-e a díj.",
+   "en": "Faction switch; second arg picks cubit payment."
+  },
+  "pilot.address": {
+   "args": "",
+   "hu": "Azonos hálózati címen ülő fiókok kimutatása.",
+   "en": "Accounts sharing a network address."
+  },
+  "pilot.save": {
+   "args": "",
+   "hu": "A bent lévők azonnali mentése az adatbázisba.",
+   "en": "Flush everyone online to the database."
+  },
+  "pilot.multi-login": {
+   "args": "",
+   "hu": "Többes belépés engedélyének kapcsolója.",
+   "en": "Toggle for multiple logins."
+  },
+  "notice.all": {
+   "args": "\"<szöveg>\"",
+   "hu": "Üzenet minden bent lévőnek (felugró ablak). Idézőjelezd!",
+   "en": "Message to everyone in the game (popup). Quote it!"
+  },
+  "notice.restart": {
+   "args": "",
+   "hu": "Beépített 'újraindítás jön' figyelmeztetés mindenkinek.",
+   "en": "The built-in restart warning to everyone."
+  },
+  "sector.event": {
+   "args": "",
+   "hu": "Teherhajós esemény élesítése a SAJÁT szektorodban.",
+   "en": "Arm the freighter event in YOUR sector."
+  },
+  "sector.zones": {
+   "args": "",
+   "hu": "A szektor zónáinak kiírása.",
+   "en": "Prints the sector's zones."
+  },
+  "outpost.points": {
+   "args": "<colonial|cylon> <pont>",
+   "hu": "Készültség-pont a saját szektorodban (±).",
+   "en": "Readiness points in your sector (±)."
+  },
+  "outpost.points-max": {
+   "args": "",
+   "hu": "MINDEN szektor készültsége maximumra.",
+   "en": "Every sector's readiness to max."
+  },
+  "tally.set": {
+   "args": "<név> <a> <b> <c>",
+   "hu": "Számláló átírása adott értékre.",
+   "en": "Set a tally to a value."
+  },
+  "tally.add": {
+   "args": "<név> <a> <b> <c>",
+   "hu": "Számláló növelése.",
+   "en": "Add to a tally."
+  },
+  "boost.loot": {
+   "args": "<név> …",
+   "hu": "Zsákmány-szorzó adása.",
+   "en": "Grant a loot boost."
+  },
+  "boost.di": {
+   "args": "<név> …",
+   "hu": "DI-szorzó adása.",
+   "en": "Grant a DI boost."
+  },
+  "assignment.clear": {
+   "args": "",
+   "hu": "A napi küldetéseid törlése.",
+   "en": "Clear your assignments."
+  },
+  "assignment.clear-for": {
+   "args": "<név>",
+   "hu": "Küldetés-törlés más pilótának.",
+   "en": "Clear another pilot's assignments."
+  },
+  "assignment.repair": {
+   "args": "<név>",
+   "hu": "Beragadt küldetések helyrerakása.",
+   "en": "Repair stuck assignments."
+  },
+  "ship.buff": {
+   "args": "<típus>",
+   "hu": "Ön-buff a saját hajódra.",
+   "en": "Self buff on your ship."
+  },
+  "ship.invulnerable": {
+   "args": "<0|1>",
+   "hu": "Sebezhetetlenség (GodMode) kapcsoló.",
+   "en": "Invulnerability toggle."
+  },
+  "ship.max-gear": {
+   "args": "",
+   "hu": "A hajód felszerelése maximumra.",
+   "en": "Your ship's gear to max."
+  },
+  "ship.teleport": {
+   "args": "",
+   "hu": "Teleport a célpontodhoz.",
+   "en": "Teleport to your target."
+  },
+  "ammo.give": {
+   "args": "…",
+   "hu": "Lőszer adása.",
+   "en": "Grant ammo."
+  },
+  "ammo.all": {
+   "args": "",
+   "hu": "Minden fogyóeszköz feltöltése.",
+   "en": "Refill every consumable."
+  },
+  "mail.send": {
+   "args": "<név> …",
+   "hu": "Rendszerlevél küldése.",
+   "en": "Send a system mail."
+  },
+  "mail.send-to": {
+   "args": "<név> <cubit> <tylium> <titán> <token>",
+   "hu": "Levél nyersanyag-melléklettel.",
+   "en": "Mail with resource attachments."
+  },
+  "paint.drop-all": {
+   "args": "<név>",
+   "hu": "A pilóta összes festékének elvétele.",
+   "en": "Remove all the pilot's paints."
+  },
+  "object.report": {
+   "args": "",
+   "hu": "A célzott objektum adatai.",
+   "en": "Report on your target."
+  },
+  "object.report-guid": {
+   "args": "<név> <guid>",
+   "hu": "Tárgy-jelentés guid szerint.",
+   "en": "Item report by guid."
+  },
+  "debris.clear": {
+   "args": "",
+   "hu": "Roncsok törlése a szektorból.",
+   "en": "Clear debris from the sector."
+  },
+  "planet.clear": {
+   "args": "",
+   "hu": "Bolygóközeli objektumok törlése.",
+   "en": "Clear planet objects."
+  },
+  "drone.spawn": {
+   "args": "…",
+   "hu": "Drón keltése.",
+   "en": "Spawn a drone."
+  },
+  "reward.try": {
+   "args": "…",
+   "hu": "Jutalom-kártya kipróbálása.",
+   "en": "Try a reward card."
+  },
+  "refund.all": {
+   "args": "",
+   "hu": "Fejlesztési költségek visszatérítése.",
+   "en": "Refund upgrade costs."
+  },
+  "kill_em_all": {
+   "args": "",
+   "hu": "A szektor összes NPC-hajója felrobban (halálként).",
+   "en": "Every NPC ship in the caller's sector dies."
+  },
+  "reset_mobs": {
+   "args": "",
+   "hu": "A szektor NPC-i csendben eltűnnek, a spawnerek újratöltenek.",
+   "en": "NPCs vanish quietly; spawners refill."
+  },
+  "loot_target_x10": {
+   "args": "",
+   "hu": "10× a target_loot: a célpont tízszeres sebzést kap.",
+   "en": "target_loot ten times over."
+  },
+  "change_faction": {
+   "args": "colonial|cylon",
+   "hu": "A hívó saját oldalváltása, ingyen.",
+   "en": "Switch the caller's own side, free."
+  },
+  "static_debug": {
+   "args": "",
+   "hu": "A hívó pilóta adatai: azonosító, frakció, szektor, jogok.",
+   "en": "Prints the caller's id, faction, sector, roles."
+  },
+  "uber": {
+   "args": "",
+   "hu": "God mode + teljes hull + sebzésbuff 180 mp-re.",
+   "en": "God mode + full hull + damage buff for 180s."
+  },
+  "spawn_mine": {
+   "args": "",
+   "hu": "Egy élesített HE-akna a hajó mögé (3 mp élesedés).",
+   "en": "One armed HE mine behind the ship (arms in 3s)."
+  },
+  "self_buff": {
+   "args": "speed|hp|heal|dmg|range|cooldown|dispell",
+   "hu": "Fejlesztői önbuff; a dispell mindent visszaállít.",
+   "en": "Dev self-buff; dispell resets everything."
+  }
+ }
+}

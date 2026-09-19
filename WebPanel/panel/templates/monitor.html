@@ -1,0 +1,178 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ t('monitor.title') }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('monitor.title') }}</h1>
+  <span class="spacer"></span>
+  <span class="spanpills">
+    {% for s in ('1h', '24h') %}
+    <button class="pill {% if s == span %}active{% endif %}" type="button" data-span="{{ s }}">{{ t('monitor.span.' + s) }}</button>
+    {% endfor %}
+  </span>
+  <label class="nullbox"><input type="checkbox" id="mon-auto" checked> <span>{{ t('logs.auto') }}</span></label>
+</div>
+
+<div class="grid" id="mon-root">
+  <section class="card col-4">
+    <h2 class="card-title">{{ t('monitor.machine') }}</h2>
+    <div class="meterlist">
+      <div class="meter"><div class="mk"><span>CPU</span><b data-f="cpu"></b></div>
+        <div class="mbar"><i data-bar="cpu"></i></div>
+        <svg class="spark" data-spark="cpu" viewBox="0 0 240 34" preserveAspectRatio="none"
+             role="img" aria-label="CPU"><path class="sfill"/><path class="sline"/><circle class="sdot" r="2.5"/></svg>
+        <div class="scap dim" data-cap="cpu"></div></div>
+      <div class="meter"><div class="mk"><span>RAM</span><b data-f="mem"></b></div>
+        <div class="mbar"><i data-bar="mem"></i></div>
+        <svg class="spark" data-spark="mem" viewBox="0 0 240 34" preserveAspectRatio="none"
+             role="img" aria-label="RAM"><path class="sfill"/><path class="sline"/><circle class="sdot" r="2.5"/></svg>
+        <div class="scap dim" data-cap="mem"></div></div>
+      <div class="meter"><div class="mk"><span>{{ t('monitor.disk') }}</span><b data-f="disk"></b></div>
+        <div class="mbar"><i data-bar="disk"></i></div></div>
+      <div class="meter"><div class="mk"><span>{{ t('home.online') }}</span><b data-f="online"></b></div>
+        <svg class="spark" data-spark="online" viewBox="0 0 240 34" preserveAspectRatio="none"
+             role="img" aria-label="online"><path class="sfill"/><path class="sline"/><circle class="sdot" r="2.5"/></svg>
+        <div class="scap dim" data-cap="online"></div></div>
+    </div>
+    <p class="hint mt10">{{ t('monitor.history.hint') }}</p>
+    <p class="hint mt12">load <span class="mono" data-f="load"></span>
+      · {{ t('monitor.net') }} <span class="mono" data-f="net"></span></p>
+  </section>
+
+  <section class="card col-4">
+    <h2 class="card-title">{{ t('monitor.processes') }}</h2>
+    <dl class="statlist">
+      <div><dt>{{ t('monitor.game_proc') }}</dt><dd class="mono" data-f="game"></dd></div>
+      <div><dt>{{ t('monitor.panel_proc') }}</dt><dd class="mono" data-f="panel"></dd></div>
+      <div><dt>{{ t('home.online') }}</dt><dd class="mono" data-f="online"></dd></div>
+      <div><dt>{{ t('home.uptime') }}</dt><dd class="mono" data-f="uptime"></dd></div>
+    </dl>
+  </section>
+
+  <section class="card col-4">
+    <h2 class="card-title">{{ t('monitor.busiest') }}</h2>
+    <dl class="statlist" id="mon-busy"></dl>
+  </section>
+</div>
+
+<script nonce="{{ nonce }}">
+(function () {
+  var S = {{ {"dead": t('monitor.dead'), "threads": t('monitor.threads'),
+              "span1h": t('monitor.history.span'), "span24h": t('monitor.span.24h'),
+              "pilots": t('monitor.pilots_short'), "cold": t('sectors.cold')} | tojson }};
+  var span = {{ span | tojson }};
+  var auto = document.getElementById("mon-auto");
+  var busy = document.getElementById("mon-busy");
+
+  function put(field, text) {
+    document.querySelectorAll('[data-f="' + field + '"]').forEach(function (el) {
+      el.textContent = text;
+    });
+  }
+  function bar(field, pct) {
+    document.querySelectorAll('[data-bar="' + field + '"]').forEach(function (el) {
+      el.style.width = Math.min(100, pct) + "%";
+      el.className = pct > 88 ? "hot" : pct > 70 ? "warm" : "";
+    });
+  }
+  function procText(slice) {
+    if (!slice || !slice.alive) { return S.dead; }
+    return slice.rss_mb + " MB · " + slice.cpu + "% · " + slice.threads + " " + S.threads;
+  }
+  function spark(field, values, ceiling, label) {
+    var svg = document.querySelector('[data-spark="' + field + '"]');
+    var cap = document.querySelector('[data-cap="' + field + '"]');
+    if (!svg || !values || values.length < 2) { return; }
+    var top = ceiling || Math.max.apply(null, values.concat([1]));
+    var w = 240, h = 34, pad = 3;
+    var step = w / (values.length - 1);
+    var pts = values.map(function (v, i) {
+      var y = h - pad - (Math.min(v, top) / top) * (h - 2 * pad);
+      return [i * step, y];
+    });
+    var line = "M" + pts.map(function (p) { return p[0].toFixed(1) + " " + p[1].toFixed(1); }).join(" L");
+    svg.querySelector(".sline").setAttribute("d", line);
+    svg.querySelector(".sfill").setAttribute("d", line + " L" + w + " " + h + " L0 " + h + " Z");
+    var last = pts[pts.length - 1];
+    var dot = svg.querySelector(".sdot");
+    dot.setAttribute("cx", last[0]); dot.setAttribute("cy", last[1]);
+    if (cap) {
+      var lo = Math.min.apply(null, values), hi = Math.max.apply(null, values);
+      cap.textContent = "min " + Math.round(lo) + " · max " + Math.round(hi) + " · " + label;
+    }
+  }
+  function paint(snap) {
+    var machine = snap.machine;
+    put("cpu", machine.cpu + "%"); bar("cpu", machine.cpu);
+    put("mem", machine.mem_used_mb + " / " + machine.mem_total_mb + " MB"); bar("mem", machine.mem_pct);
+    put("disk", machine.disk_used_gb + " / " + machine.disk_total_gb + " GB"); bar("disk", machine.disk_pct);
+    put("load", machine.load.join(" · "));
+    put("net", "↑" + machine.net_sent_mb + " ↓" + machine.net_recv_mb + " MB");
+    put("game", procText(snap.game));
+    put("panel", procText(snap.panel));
+    put("online", snap.live ? String((snap.live.online || []).length) : "—");
+    document.querySelectorAll('[data-f="uptime"]').forEach(function (el) {
+      if (snap.live && snap.live.uptime_s != null) { el.dataset.uptime = String(snap.live.uptime_s); }
+      else { delete el.dataset.uptime; el.textContent = "—"; }
+    });
+    if (window.panelTick) { window.panelTick(); }
+    if (snap.history) {
+      var label = snap.history.span === "24h" ? S.span24h : S.span1h;
+      spark("cpu", snap.history.cpu, 100, label);
+      spark("mem", snap.history.mem, 100, label);
+      spark("online", snap.history.online, null, label);
+    }
+    busy.textContent = "";
+    (snap.busiest || []).forEach(function (row) {
+      var item = document.createElement("div");
+      var what = document.createElement("dt"); what.textContent = row.name;
+      var num = document.createElement("dd"); num.className = "mono";
+      num.textContent = row.players + " " + S.pilots + " · " + row.total + " obj";
+      item.appendChild(what); item.appendChild(num); busy.appendChild(item);
+    });
+    if (!(snap.busiest || []).length) {
+      var item = document.createElement("div");
+      var what = document.createElement("dt"); what.className = "dim"; what.textContent = S.cold;
+      item.appendChild(what); item.appendChild(document.createElement("dd")); busy.appendChild(item);
+    }
+  }
+
+  paint({{ snap | tojson }});
+
+  var source = null, timer = null;
+  function stop() {
+    if (source) { source.close(); source = null; }
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+  function pull() {
+    fetch("/monitor/data?span=" + span, { credentials: "same-origin" })
+      .then(function (r) { return r.json(); }).then(paint).catch(function () {});
+  }
+  function start() {
+    stop();
+    if (!auto.checked) { return; }
+    if (window.EventSource) {
+      source = new EventSource("/monitor/events?span=" + span);
+      source.addEventListener("snapshot", function (ev) {
+        try { paint(JSON.parse(ev.data)); } catch (e) {}
+      });
+      source.addEventListener("error", function () { stop(); timer = setInterval(pull, 5000); });
+    } else {
+      timer = setInterval(pull, 5000);
+    }
+  }
+  auto.addEventListener("change", start);
+  document.querySelectorAll("[data-span]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      span = button.dataset.span;
+      document.querySelectorAll("[data-span]").forEach(function (other) {
+        other.classList.toggle("active", other === button);
+      });
+      pull();
+      start();
+    });
+  });
+  start();
+})();
+</script>
+{% endblock %}

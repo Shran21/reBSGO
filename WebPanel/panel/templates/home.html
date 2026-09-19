@@ -1,0 +1,107 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ t('home.title') }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('home.title') }}</h1>
+  <span class="spacer"></span>
+  <span class="headstat" data-refresh="8">
+  {% if live %}<span class="sub"><span class="status-dot dot-ok"></span>{{ t('home.server.up') }} · <span class="mono" data-uptime="{{ live.uptime_s }}">{{ live.uptime }}</span></span>
+  {% elif bridge_wired %}<span class="sub"><span class="status-dot dot-warn"></span>{{ t('home.server.down') }}</span>
+  {% else %}<span class="sub"><span class="status-dot dot-muted"></span>{{ t('home.server.nobridge') }}</span>{% endif %}
+  </span>
+  {% if may_operate %}
+  <form method="post" action="/server/restart" class="m0"
+        data-ask="{{ t('server.restart.sure') }}"
+        {% if live and live.online %}data-ask-detail="{{ t('home.online') }}: {{ live.online | map(attribute='name') | join(', ') }}"{% endif %}>
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn btn-small btn-danger" type="submit">{{ t('server.restart') }}</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if error %}<p class="flash flash-error">{{ t(error) }}</p>{% endif %}
+
+<div class="grid" data-refresh="8">
+  <section class="card col-8">
+    <h2 class="card-title">{{ t('home.server') }}</h2>
+    {% if live %}
+      <div class="stat-row">
+        <div class="stat"><span class="v">{{ live.online | length }}</span>
+          <span class="k">{{ t('home.online') }}</span></div>
+        <div class="stat"><span class="v">{{ live.sectors | length }}</span>
+          <span class="k">{{ t('home.sectors') }}</span></div>
+        <div class="stat"><span class="v mono" data-uptime="{{ live.uptime_s }}">{{ live.uptime }}</span>
+          <span class="k">{{ t('home.uptime') }}</span></div>
+      </div>
+      {% if live.online %}
+        <div class="chip-row">
+          {% for pilot in live.online %}
+            <a class="chip chip-link" href="/users/{{ pilot.id }}">{{ pilot.name }}
+              <span class="dim">· {{ pilot.sector_name or pilot.sector }}</span></a>
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="dim m14-0">{{ t('home.nobody') }}</p>
+      {% endif %}
+    {% elif bridge_wired %}
+      <p class="dim m0">{{ t('home.server.down.long') }}</p>
+    {% else %}
+      <p class="dim m0">{{ t('home.server.nobridge') }}</p>
+    {% endif %}
+    {% if spark %}
+    <svg class="spark spark-wide" viewBox="0 0 240 34" preserveAspectRatio="none" role="img"
+         aria-label="{{ t('home.online.hour') }}">
+      <path class="sfill" d="{{ spark.fill }}"/><path class="sline" d="{{ spark.line }}"/>
+      <circle class="sdot" r="2.5" cx="{{ spark.x }}" cy="{{ spark.y }}"/></svg>
+    <div class="scap dim">{{ t('home.online.hour') }} · min {{ spark.lo }} · max {{ spark.hi }}</div>
+    {% endif %}
+  </section>
+
+  <section class="card col-4">
+    <h2 class="card-title">{{ t('home.health') }}</h2>
+    <ul class="health">
+      <li><span class="hk">{{ t('home.health.errors') }}</span>
+        {% if health.errors_new %}<a class="hv bad" href="/logs?channel=error">{{ health.errors_new }} {{ t('home.health.errors.new') }}</a>
+        {% else %}<span class="hv ok">{{ t('home.health.errors.no') }}{% if health.error_last %} <span class="dim">· {{ t('home.health.errors.last') }} {{ health.error_last }}</span>{% endif %}</span>{% endif %}</li>
+      <li><span class="hk">{{ t('home.health.backup') }}</span>
+        {% if health.backup %}<a class="hv" href="/tools">{{ health.backup.when }}</a>
+        {% else %}<span class="hv warn">{{ t('home.health.backup.none') }}</span>{% endif %}</li>
+      <li><span class="hk">{{ t('home.health.disk') }}</span>
+        {% if health.disk_free_pct is not none %}
+        <span class="hv {% if health.disk_free_pct < 10 %}bad{% elif health.disk_free_pct < 20 %}warn{% else %}ok{% endif %}">{{ health.disk_free_pct }}%</span>
+        {% else %}<span class="hv dim">—</span>{% endif %}</li>
+      {% if maintenance %}
+      <li><span class="hk">{{ t('home.health.maintenance') }}</span>
+        {% if maintenance.on %}<a class="hv warn" href="/tools">{{ t('home.health.maintenance.on') }}</a>
+        {% else %}<span class="hv">{{ t('home.health.maintenance.off') }}</span>{% endif %}</li>
+      {% endif %}
+      <li><span class="hk">{{ t('home.pilots') }}</span><span class="hv">{{ overview.pilots }}</span></li>
+    </ul>
+  </section>
+
+  <section class="card col-8">
+    <h2 class="card-title">{{ t('home.busiest') }}</h2>
+    {% if busiest %}
+      {% for row in busiest %}
+      <div class="busy-row"><a href="/sectors#s{{ row.id }}">{{ row.name }}</a>
+        <span class="mono dim">{{ row.players }} {{ t('monitor.pilots_short') }} · {{ row.npcs }} NPC</span></div>
+      {% endfor %}
+    {% else %}
+      <p class="dim m0">{{ t('sectors.cold') }}</p>
+    {% endif %}
+  </section>
+
+  <section class="card col-4">
+    <h2 class="card-title">{{ t('home.quick') }}</h2>
+    <div class="quick">
+      {% if may_console %}<a class="btn btn-small" href="/tools">{{ t('home.quick.broadcast') }}</a>{% endif %}
+      <a class="btn btn-small" href="/logs?channel=error">{{ t('home.quick.errors') }}</a>
+      <a class="btn btn-small" href="/sectors">{{ t('home.quick.sectors') }}</a>
+      <a class="btn btn-small" href="/monitor">{{ t('home.quick.monitor') }}</a>
+      {% if may_operate %}<a class="btn btn-small" href="/tools">{{ t('home.quick.backup') }}</a>{% endif %}
+    </div>
+  </section>
+</div>
+{% endblock %}

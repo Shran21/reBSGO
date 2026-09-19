@@ -1,0 +1,162 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ t('logs.title') }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('logs.title') }}</h1>
+  <span class="spacer"></span>
+  {% if truncated %}<span class="sub">{{ t('logs.truncated') }}</span>{% endif %}
+</div>
+
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if error %}<p class="flash flash-error">{{ t(error) }}</p>{% endif %}
+
+<div class="pillrow">
+  {% for name in channels %}
+  <a class="pill {% if name == channel %}active{% endif %}"
+     href="/logs?channel={{ name }}">{{ name }}</a>
+  {% endfor %}
+</div>
+
+<form class="logbar" method="get" action="/logs">
+  <input type="hidden" name="channel" value="{{ channel }}">
+  <select name="file">
+    {% for entry in files %}
+    <option value="{{ entry.index }}" {% if entry.index == file_index %}selected{% endif %}>
+      {{ entry.name }} · {{ (entry.size / 1024) | round | int }} kB</option>
+    {% endfor %}
+  </select>
+  <input type="search" name="q" value="{{ q }}" placeholder="{{ t('logs.search') }}">
+  <select name="n">
+    {% for count in (100, 200, 500, 1000) %}
+    <option value="{{ count }}" {% if count == n %}selected{% endif %}>{{ count }}</option>
+    {% endfor %}
+  </select>
+  {% if channel == 'error' %}
+  <label class="nullbox"><input type="checkbox" name="only" value="all" id="log-warnings"
+         {% if only == 'all' %}checked{% endif %}> <span>{{ t('logs.with_warnings') }}</span></label>
+  {% endif %}
+  <button class="btn" type="submit">{{ t('logs.load') }}</button>
+  <label class="nullbox"><input type="checkbox" id="log-auto"> <span>{{ t('logs.auto') }}</span></label>
+</form>
+
+<div class="logtools">
+  <input type="search" id="log-filter" placeholder="{{ t('logs.filter') }}" aria-label="{{ t('logs.filter') }}">
+  <button class="btn btn-small" type="button" data-copy-from="log-pane">{{ t('logs.copy') }}</button>
+  <button class="btn btn-small" type="button" id="log-download">{{ t('logs.download') }}</button>
+</div>
+
+<div class="card term col-12">
+  <div class="term-out logpane" id="log-pane"></div>
+</div>
+
+{% if log_state %}
+<div class="card col-12 mt14">
+  <h2 class="card-title">{{ t('logs.volume') }}</h2>
+  <p class="hint m0-12">
+    {{ t('logs.now') }}: <b class="mono">{{ log_state.level }}</b>
+    {% for area, held in log_state.areas.items() %}
+      · {{ area }} = <span class="mono">{{ held }}</span>
+    {% endfor %}
+  </p>
+  {% if may_turn %}
+  <form class="logbar" method="post" action="/logs/level">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="channel" value="{{ channel }}">
+    <select name="area">
+      <option value="">{{ t('logs.whole') }}</option>
+      {% for name in log_state.area_names %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
+    </select>
+    <select name="level">
+      {% for name in ("debug", "info", "warning", "error") %}
+      <option value="{{ name }}">{{ name }}</option>
+      {% endfor %}
+      <option value="default">{{ t('logs.release') }}</option>
+    </select>
+    <button class="btn btn-primary" type="submit">{{ t('logs.turn') }}</button>
+  </form>
+  <p class="hint">{{ t('logs.volatile') }}</p>
+  {% endif %}
+</div>
+{% elif may_turn %}
+<p class="hint mt14">{{ t('logs.down') }}</p>
+{% endif %}
+
+<script nonce="{{ nonce }}">
+(function () {
+  var pane = document.getElementById("log-pane");
+  var auto = document.getElementById("log-auto");
+  var filter = document.getElementById("log-filter");
+  var channel = {{ channel | tojson }};
+  var url = "/logs/tail?channel=" + encodeURIComponent(channel) + "&file={{ file_index }}&n={{ n }}"
+            + "&only={{ only }}&q=" + encodeURIComponent({{ q | tojson }});
+  var warnings = document.getElementById("log-warnings");
+  if (warnings) { warnings.addEventListener("change", function () { warnings.form.submit(); }); }
+  var all = [];
+
+  function shown() {
+    var needle = filter.value.trim().toLowerCase();
+    if (!needle) { return all; }
+    return all.filter(function (line) { return line.toLowerCase().indexOf(needle) >= 0; });
+  }
+  function paint(lines) {
+    all = lines;
+    var stick = pane.scrollTop + pane.clientHeight >= pane.scrollHeight - 8;
+    pane.textContent = "";
+    shown().forEach(function (line) {
+      var row = document.createElement("div");
+      row.className = "term-row";
+      if (line.indexOf(" X ") >= 0) { row.className += " err"; }
+      else if (line.indexOf(" ! ") >= 0) { row.className += " warn"; }
+      row.textContent = line;
+      pane.appendChild(row);
+    });
+    if (stick) { pane.scrollTop = pane.scrollHeight; }
+  }
+
+  paint({{ lines | tojson }});
+  pane.scrollTop = pane.scrollHeight;
+  filter.addEventListener("input", function () { paint(all); });
+
+  document.getElementById("log-download").addEventListener("click", function () {
+    var blob = new Blob([shown().join("\n") + "\n"], { type: "text/plain" });
+    var link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = channel + ".log";
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(function () { URL.revokeObjectURL(link.href); link.remove(); }, 500);
+  });
+
+  function pull() {
+    fetch(url, { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (data) { paint(data.lines || []); })
+      .catch(function () {});
+  }
+
+  var source = null, timer = null;
+  function stop() {
+    if (source) { source.close(); source = null; }
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+  function follow() {
+    stop();
+    if (!auto.checked) { return; }
+    pull();
+    if (window.EventSource) {
+      source = new EventSource("/events");
+      source.addEventListener("logs", function (ev) {
+        var changed = [];
+        try { changed = JSON.parse(ev.data) || []; } catch (e) {}
+        if (changed.indexOf(channel) >= 0) { pull(); }
+      });
+      source.addEventListener("error", function () { stop(); timer = setInterval(pull, 5000); });
+    } else {
+      timer = setInterval(pull, 5000);
+    }
+  }
+  auto.addEventListener("change", follow);
+})();
+</script>
+{% endblock %}

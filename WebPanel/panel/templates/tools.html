@@ -1,0 +1,136 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ t('tools.title') }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('tools.title') }}</h1>
+</div>
+
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if error %}<p class="flash flash-error">{{ t(error) }}</p>{% endif %}
+
+<div class="grid">
+  {% if may_console %}
+  <section class="card col-6">
+    <h2 class="card-title">{{ t('tools.broadcast') }}</h2>
+    <form class="logbar" method="post" action="/tools/broadcast">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <input name="message" required maxlength="200" placeholder="{{ t('tools.broadcast.what') }}">
+      <button class="btn btn-primary" type="submit">{{ t('tools.broadcast.send') }}</button>
+    </form>
+    <p class="hint">{{ t('tools.broadcast.hint') }}</p>
+  </section>
+
+  <section class="card col-6">
+    <h2 class="card-title">{{ t('tools.samehost') }}</h2>
+    <form method="post" action="/tools/samehost">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn" type="submit">{{ t('tools.samehost.run') }}</button>
+    </form>
+    {% if samehost is defined %}
+    <pre class="term-out mt12 minh60">{{ samehost }}</pre>
+    {% endif %}
+    <p class="hint">{{ t('tools.samehost.hint') }}</p>
+  </section>
+  {% endif %}
+
+  {% if may_operate %}
+  <section class="card col-6">
+    <h2 class="card-title">{{ t('tools.restart.title') }}</h2>
+    {% if restart_plan %}
+      <p class="flash flash-warn">{{ t('tools.restart.live') }}
+        <b class="mono">{{ (restart_plan.remaining / 60) | round(1) }} min</b>
+        <span class="dim">({{ restart_plan.by }})</span></p>
+      <form method="post" action="/server/restart-cancel">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn btn-primary" type="submit">{{ t('tools.restart.cancel') }}</button>
+      </form>
+    {% else %}
+      <form class="logbar" method="post" action="/server/restart-plan"
+            data-ask="{{ t('tools.restart.sure') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <select name="minutes">
+          {% for m in (5, 10, 15, 30) %}<option value="{{ m }}" {% if m == 10 %}selected{% endif %}>{{ m }} perc</option>{% endfor %}
+        </select>
+        <button class="btn btn-danger" type="submit">{{ t('tools.restart.arm') }}</button>
+      </form>
+    {% endif %}
+    <p class="hint">{{ t('tools.restart.hint') }}</p>
+  </section>
+
+  <section class="card col-6">
+    <h2 class="card-title">{{ t('tools.maintenance') }}</h2>
+    {% if maintenance %}
+      {% if maintenance.on %}
+        <p class="flash flash-warn">{{ t('tools.maintenance.live') }}
+          {% if maintenance.message %}<span class="mono">{{ maintenance.message }}</span>{% endif %}</p>
+        <form method="post" action="/tools/maintenance">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="on" value="0">
+          <button class="btn btn-primary" type="submit">{{ t('tools.maintenance.lift') }}</button>
+        </form>
+      {% else %}
+        <form class="logbar" method="post" action="/tools/maintenance">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <input type="hidden" name="on" value="1">
+          <input name="message" maxlength="200" placeholder="{{ t('tools.maintenance.message') }}">
+          <button class="btn btn-danger" type="submit">{{ t('tools.maintenance.raise') }}</button>
+        </form>
+      {% endif %}
+      <p class="hint">{{ t('tools.maintenance.hint') }}</p>
+    {% else %}
+      <p class="dim">{{ t('sectors.down') }}</p>
+    {% endif %}
+  </section>
+
+  <section class="card col-6">
+    <h2 class="card-title">{{ t('tools.backup') }}</h2>
+    <form method="post" action="/tools/backup">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn btn-primary" type="submit"
+              {% if backup_busy %}disabled{% endif %}>
+        {{ t('tools.backup.busy') if backup_busy else t('tools.backup.make') }}</button>
+    </form>
+    {% if backups %}
+    <dl class="statlist mt12">
+      {% for entry in backups %}
+      <div><dt class="mono"><a href="/tools/backup/{{ entry.name }}">{{ entry.name }}</a></dt>
+        <dd class="mono dim">{{ entry.when }} · {{ entry.size_mb }} MB</dd></div>
+      {% endfor %}
+    </dl>
+    {% endif %}
+    <p class="hint">{{ t('tools.backup.hint') }}</p>
+  </section>
+  {% endif %}
+
+  <section class="card col-12">
+    <h2 class="card-title">{{ t('tools.cards') }}</h2>
+    <form class="logbar" method="get" action="/tools">
+      <input type="search" name="q" value="{{ q }}" placeholder="{{ t('tools.cards.what') }}">
+      <button class="btn" type="submit">{{ t('db.search') | replace('…', '') }}</button>
+    </form>
+    {% if results %}
+    <div class="scroll-x">
+      <table>
+        <thead><tr><th>guid</th><th>{{ t('users.name') }}</th><th>key</th>
+          <th>view</th><th>{{ t('tools.cards.file') }}</th></tr></thead>
+        <tbody>
+          {% for row in results %}
+          <tr>
+            <td class="mono">{{ row.guid }}</td>
+            <td>{{ row.name or '—' }}</td>
+            <td class="mono dim">{{ row.key or '—' }}</td>
+            <td class="mono dim">{{ row.view }}</td>
+            <td class="mono dim">{{ row.file }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% elif q %}
+    <p class="dim">{{ t('db.empty') }}</p>
+    {% endif %}
+    <p class="hint">{{ t('tools.cards.hint') }}</p>
+  </section>
+</div>
+{% endblock %}

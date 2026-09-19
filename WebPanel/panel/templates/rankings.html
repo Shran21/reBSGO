@@ -1,0 +1,56 @@
+{# github.com/Shran21 #}
+{% extends "base.html" %}
+{% block title %}{{ t('rankings.title') }} · {{ t('panel.title') }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t('rankings.title') }}</h1>
+  <span class="spacer"></span>
+  {% if may_operate %}
+  <form class="m0" method="post" action="/rankings/recalc">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn btn-small" type="submit">{{ t('rankings.recalc') }}</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if error %}<p class="flash flash-error">{{ t(error) }}</p>{% endif %}
+
+<form class="logbar" method="get" action="/rankings">
+  <select name="guid">
+    {% for counter in counters %}
+    <option value="{{ counter.guid }}" {% if counter.guid == guid %}selected{% endif %}>
+      {{ counter.name }}</option>
+    {% endfor %}
+  </select>
+  <select name="period">
+    <option value="">{{ t('rankings.live') }}</option>
+    {% for key in periods %}
+    <option value="{{ key }}" {% if key == period %}selected{% endif %}>{{ key }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn" type="submit">{{ t('logs.load') }}</button>
+</form>
+
+<div class="card table-card col-12">
+  <div class="scroll-x">
+    <table>
+      <thead><tr><th>#</th><th>{{ t('users.name') }}</th>
+        <th class="num">{{ counter_name }}</th></tr></thead>
+      <tbody>
+        {% for row in board %}
+        <tr class="rowlink" tabindex="0" data-href="/users/{{ row.id }}">
+          <td class="mono dim">{{ loop.index }}</td>
+          <td><strong>{{ row.name }}</strong></td>
+          <td class="num mono">{{ '{:,}'.format(row.value | int).replace(',', ' ')
+              if (row.value | float).is_integer() else row.value }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="dim">{{ t('db.empty') }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="hint">{{ t('rankings.hint') }}</p>
+{% endblock %}
