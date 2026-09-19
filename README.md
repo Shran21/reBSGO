@@ -1,5 +1,3 @@
-[github.com/Shran21](https://github.com/Shran21)
-
 # reBSGO
 
 Magyar · [English](#english)
