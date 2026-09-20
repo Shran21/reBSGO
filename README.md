@@ -59,7 +59,7 @@ Python 3.13, a csomag hozza magával; a szerver a standard könyvtárra épül. 
 ## Kapcsolat
 
 - Projektoldal: <https://github.com/Shran21/reBSGO>
-- Discord: <https://discord.com/users/469848422732660767>
+- E-mail: [shranit.dev@gmail.com](mailto:shranit.dev@gmail.com)
 
 A launcher alsó sávjának **WEBOLDAL** és **KAPCSOLAT** hivatkozása ugyanide visz.
 
@@ -132,7 +132,7 @@ Python 3.13, bundled with the package; the server is built on the standard libra
 ### Contact
 
 - Project page: <https://github.com/Shran21/reBSGO>
-- Discord: <https://discord.com/users/469848422732660767>
+- Email: [shranit.dev@gmail.com](mailto:shranit.dev@gmail.com)
 
 The **WEBOLDAL** and **KAPCSOLAT** links along the bottom of the launcher lead to the same two places.
 

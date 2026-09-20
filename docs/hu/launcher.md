@@ -41,8 +41,8 @@ listát ad, a launcher kihagyja az ellenőrzést, és azt indítja, ami a
 játékosnál van — így a kliens-build egyezése a játékos dolga marad.
 
 Az alsó sáv két hivatkozása a projektoldalra
-(<https://github.com/Shran21/reBSGO>) és a fejlesztő Discordjára
-(<https://discord.com/users/469848422732660767>) visz.
+(<https://github.com/Shran21/reBSGO>) visz, illetve levelet nyit a fejlesztőnek
+([shranit.dev@gmail.com](mailto:shranit.dev@gmail.com)).
 
 A launcher az ajtót a **manifest** alakjáról ismeri fel (portkeresésnél is),
 tehát csak reBSGO-szerverhez kapcsolódik. A játék indítási argumentumai a

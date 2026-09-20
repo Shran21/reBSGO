@@ -46,8 +46,8 @@ out an empty list, the launcher skips the check and starts whatever the player
 has — so matching the client build stays the player's business.
 
 The two links along the bottom lead to the project page
-(<https://github.com/Shran21/reBSGO>) and to the developer's Discord
-(<https://discord.com/users/469848422732660767>).
+(<https://github.com/Shran21/reBSGO>) and open a message to the developer
+([shranit.dev@gmail.com](mailto:shranit.dev@gmail.com)).
 
 The launcher recognises the door by the shape of its **manifest** (during the
 port scan too), so it only ever connects to a reBSGO server. The game is
