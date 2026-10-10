@@ -20,6 +20,10 @@ Belépni csak **Developer (16)** vagy **Console (32)** szereppel lehet. Aki
 egyikkel sem rendelkezik, ugyanazt a mondatot kapja, mint aki rossz jelszót
 írt — szándékosan, hogy kívülről ne lehessen fiókokat feltérképezni.
 
+Friss szerveren az első ilyen fiókot a telepítő kéri be. Ha kimaradt,
+parancssorból pótolható: `tools/pilots.py create <név> --grant Developer,Console`
+(részletek: `docs/hu/szerver-admin/fiokok.md`).
+
 - A belépés **12 óráig** érvényes, és használat közben automatikusan megújul.
 - Címenként **percenként 10** próbálkozás engedett.
 - Minden belépés, elutasítás és írás bekerül a panel auditjába

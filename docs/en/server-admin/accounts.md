@@ -13,14 +13,37 @@
   `password`, and answers with an `ok <id>` line. It applies the game's own
   name rules and creates the same bare account.
   `REBSGO_ADMISSION_REGISTRATION_OPEN=false` in `.env` closes it.
-- There is no separate creator on the command line — the panel is the way
-  to go.
+- **From the command line** the same bare account is made, with the
+  launcher's name rules and password minimum (5 characters); closing the
+  registration does not affect it:
+
+      tools/pilots.py create Tuser             → prompts for the password, hidden
+      tools/pilots.py create Tuser --grant Developer,Console
+                                               → with roles in one go
+
+## The first admin account
+
+Only a Developer or a Console gets into the panel, and only a Developer can
+make an account there, so on a fresh server the first admin account cannot
+come from the panel. The installer sees to it: if no account has the
+Developer role yet, it asks for the first one and gives it the Developer and
+Console roles. If that was left out (skipped with Enter, or the installer
+ran without a terminal), make it later from the command line:
+
+    tools/pilots.py create Admin --grant Developer,Console
+    tools/pilots.py admins                   → who has the Developer role and a password
+
+An account that already exists, one registered from the launcher for
+instance, gets its roles from the `roles` command (see below).
 
 ## Password
 
 - **WebPanel** → the pilot's page → "Set password" (at least 6 characters).
-- From the command line (in the server's directory; where there is no system
-  Python, use the bundled one: `./runtime/python/bin/python3 tools/pilots.py …`):
+- From the command line. `tools/pilots.py` can be started from anywhere and
+  always works on the server's own database (`REBSGO_DB` from `.env`, or
+  else `sqlite/bgo_server.db`); where there is no system Python, use the
+  bundled one from the server's directory:
+  `./runtime/python/bin/python3 tools/pilots.py …`:
 
       tools/pilots.py list                     → who has a password
       tools/pilots.py password Tuser           → prompts for it, hidden

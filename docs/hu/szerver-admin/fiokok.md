@@ -13,13 +13,35 @@
   mezőt vár, és `ok <azonosító>` sorral felel. Ugyanazokkal a névszabályokkal
   dolgozik, mint a játék, és ugyanilyen üres fiókot készít.
   Az `.env`-ben a `REBSGO_ADMISSION_REGISTRATION_OPEN=false` bezárja.
-- Parancssorból nincs létrehozó parancs; fiókot a panelen lehet felvenni.
+- **Parancssorból** ugyanilyen üres fiók készül, a launcher névszabályaival
+  és jelszó-minimumával (5 karakter); a regisztráció lezárása erre nem hat:
+
+      tools/pilots.py create Tuser             → jelszó bekérése rejtve
+      tools/pilots.py create Tuser --grant Developer,Console
+                                               → szerepekkel együtt
+
+## Az első admin fiók
+
+A panelbe csak Developer vagy Console szereppel lehet belépni, fiókot ott
+pedig csak Developer hozhat létre, így friss szerveren az első admin fiók
+nem a panelből jön. A telepítő gondoskodik róla: ha még nincs Developer
+szerepű fiók, bekéri az elsőt, és Developer + Console szerepet ad neki.
+Ha ez kimaradt (Enterrel kihagyva, vagy terminál nélkül futott a telepítő),
+utólag parancssorból:
+
+    tools/pilots.py create Admin --grant Developer,Console
+    tools/pilots.py admins                   → kinek van Developer szerepe és jelszava
+
+Meglévő fióknak, például egy launcherből regisztráltnak, a `roles` parancs
+adja meg a szerepet (lásd lent).
 
 ## Jelszó
 
 - **WebPanel** → a pilóta adatlapja → „Jelszó beállítása" (min. 6 karakter).
-- Parancssorból (a szerver mappájából; ahol nincs rendszer-Python, a
-  csomagolt értelmezővel: `./runtime/python/bin/python3 tools/pilots.py …`):
+- Parancssorból. A `tools/pilots.py` bárhonnan indítható, mindig a szerver
+  saját adatbázisán dolgozik (a `.env`-beli `REBSGO_DB`, vagy a
+  `sqlite/bgo_server.db`); ahol nincs rendszer-Python, a szerver mappájából a
+  csomagolt értelmezővel: `./runtime/python/bin/python3 tools/pilots.py …`:
 
       tools/pilots.py list                     → kinek van jelszava
       tools/pilots.py password Tuser           → jelszó bekérése rejtve

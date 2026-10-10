@@ -35,7 +35,7 @@ else
     ZOLD=; CIAN=; PIROS=; SARGA=; VASTAG=; VEGE=
 fi
 
-OSSZES_FAZIS=8
+OSSZES_FAZIS=9
 FAZIS=0
 
 fazis() {
@@ -173,6 +173,14 @@ if [ "$CHECK" = 0 ]; then
     mkdir -p "$ROOT/logs" "$ROOT/sqlite" "$ROOT/WebPanel/logs"
 fi
 kesz "$(t 'mappák: logs/ sqlite/ WebPanel/logs/' 'directories: logs/ sqlite/ WebPanel/logs/')"
+# GitHub's upload page and a Windows checkout both drop the execute bit, and
+# systemd will not start WebPanel/run.sh without it.
+if [ "$CHECK" = 0 ]; then
+    chmod +x "$ROOT/install.sh" "$ROOT/WebPanel/run.sh" "$ROOT"/tools/*.py 2>/dev/null
+    kesz "$(t 'futtatható: install.sh, WebPanel/run.sh, tools/*.py' 'executable: install.sh, WebPanel/run.sh, tools/*.py')"
+else
+    mond "$(t '(futtathatóvá tenné: install.sh, WebPanel/run.sh, tools/*.py)' '(it would make these executable: install.sh, WebPanel/run.sh, tools/*.py)')"
+fi
 
 fazis "$(t 'Beállítások (.env)' 'Settings (.env)')"
 if [ ! -f "$ROOT/.env" ]; then
@@ -181,7 +189,8 @@ if [ ! -f "$ROOT/.env" ]; then
         cp "$ROOT/.env.example" "$ROOT/.env" 2>/dev/null || touch "$ROOT/.env"
         TOKEN=$("$PYTHON" -c "import secrets; print(secrets.token_urlsafe(32))")
         printf '\nREBSGO_PANEL_TOKEN=%s\nREBSGO_NET_PANEL_DOOR_PORT=27053\n' "$TOKEN" >> "$ROOT/.env"
-        kesz "$(t '.env elkészült, a panel-token friss' '.env written, with a fresh panel token')"
+        chmod 600 "$ROOT/.env"
+        kesz "$(t '.env elkészült, a panel-token friss; csak a tulajdonosa olvashatja' '.env written, with a fresh panel token; readable by its owner only')"
     else
         mond "$(t '(elkészítené)' '(it would write one)')"
     fi
@@ -242,6 +251,55 @@ elif [ "$CHECK" = 0 ]; then
 else
     mond "$(t '(felépítené a WebPanel/vendor/wheels tartalmából)' '(it would build one from WebPanel/vendor/wheels)')"
 fi
+# Left to the panel, panel.env is written on its first start - after run.sh has
+# already read it, found nothing, and bound to every address until a restart.
+PANEL_ENV="$ROOT/WebPanel/panel.env"
+if [ -f "$PANEL_ENV" ]; then
+    kesz "$(t 'WebPanel/panel.env már van - nem nyúlok hozzá' 'WebPanel/panel.env is already there - left untouched')"
+elif [ "$CHECK" = 1 ]; then
+    mond "$(t '(elkészítené a WebPanel/panel.env-et: a panel csak erről a gépről nyílna)' '(it would write WebPanel/panel.env: the panel would open from this machine only)')"
+elif ( cd "$ROOT/WebPanel" && REBSGO_LANG="$NYELV" "$VENV/bin/python" -c 'from panel import settings; settings.raw()' ) \
+        && [ -f "$PANEL_ENV" ]; then
+    chmod 600 "$PANEL_ENV"
+    kesz "$(t 'WebPanel/panel.env elkészült: a panel csak erről a gépről nyílik (PANEL_HOST=127.0.0.1)' 'WebPanel/panel.env written: the panel opens from this machine only (PANEL_HOST=127.0.0.1)')"
+else
+    figyel "$(t 'a WebPanel/panel.env nem készült el - az első indításkor minden címen figyel majd' 'WebPanel/panel.env was not written - on its first start the panel will listen on every address')"
+fi
+
+fazis "$(t 'Első admin fiók — a WebPanelhez és a fejlesztői jogokhoz' 'The first admin account — for the WebPanel and the developer rights')"
+PILOTAK="$ROOT/tools/pilots.py"
+POTLAS="\"$PYTHON\" \"$PILOTAK\" create <$(t 'név' 'name')> --grant Developer,Console"
+if [ "$CHECK" = 1 ]; then
+    ADMIN="$(t '(ellenőrző módban nem néztem meg)' '(not looked at in check mode)')"
+    mond "$(t '(ha még nincs Developer szerepű fiók, felajánlaná, hogy most létrehozza)' '(if no account has the Developer role yet, it would offer to make one now)')"
+elif "$PYTHON" "$PILOTAK" admins >/dev/null 2>&1; then
+    ADMIN="$(t 'már van - a listájuk:' 'already there - to list them:') \"$PYTHON\" \"$PILOTAK\" admins"
+    kesz "$(t 'van már Developer szerepű fiók - nem kérdezek' 'an account with the Developer role is already there - no question asked')"
+elif [ -t 0 ]; then
+    ADMIN="$(t 'még nincs - később:' 'none yet - later:') $POTLAS"
+    mond "$(t 'A WebPanelbe csak Developer vagy Console szereppel lehet belépni, fiókot pedig csak' 'Only a Developer or a Console gets into the WebPanel, and only a Developer can make')"
+    mond "$(t 'Developer hozhat létre. Ez az első fiók mindkettőt megkapja, és a játékba is ezzel' 'accounts there. This first account gets both, and it signs in to the game as well.')"
+    mond "$(t 'lehet belépni. A jelszó legalább 5 karakter. Enter = kihagyás.' 'The password is at least 5 characters. Enter = skip.')"
+    PROBA=0
+    LETREJOTT=0
+    while [ "$PROBA" -lt 3 ]; do
+        printf '    %s: ' "$(t 'pilótanév' 'pilot name')"
+        read -r NEV || NEV=""
+        [ -n "$NEV" ] || break
+        if "$PYTHON" "$PILOTAK" create "$NEV" --grant Developer,Console; then
+            ADMIN="$NEV (Developer, Console)"
+            LETREJOTT=1
+            kesz "$(t "kész: $NEV - ezzel lehet belépni a WebPanelbe és a játékba" "done: $NEV - this one signs in to the WebPanel and the game")"
+            break
+        fi
+        PROBA=$((PROBA + 1))
+    done
+    [ "$LETREJOTT" = 1 ] || figyel "$(t 'nem készült admin fiók - később:' 'no admin account was made - later:') $POTLAS"
+else
+    ADMIN="$(t 'még nincs - később:' 'none yet - later:') $POTLAS"
+    figyel "$(t 'nincs admin fiók, és terminál sincs, hogy megkérdezzem' 'there is no admin account, and no terminal to ask about one')"
+    mond "$(t 'később:' 'later:') $POTLAS"
+fi
 
 fazis "$(t 'Szolgáltatások — telepítés és indítás' 'Services — installing and starting')"
 if [ "$SYSTEMD" = 0 ]; then
@@ -264,6 +322,10 @@ else
     systemctl daemon-reload
     systemctl enable bsgo rebsgo-panel >/dev/null 2>&1
     kesz "$(t 'unitok a helyükön, mindkettő engedélyezve (újraindulás után is felállnak)' 'both units are in place and enabled (they come up after a reboot too)')"
+    MAR_FUTOTT=""
+    for SZOLGALTATAS in bsgo rebsgo-panel; do
+        [ "$(systemctl is-active "$SZOLGALTATAS")" = active ] && MAR_FUTOTT="$MAR_FUTOTT $SZOLGALTATAS"
+    done
     mond "$(t 'indítás...' 'starting...')"
     systemctl start bsgo rebsgo-panel
     sleep 3
@@ -274,6 +336,11 @@ else
             figyel "$(t "$SZOLGALTATAS nem indult el - napló: journalctl -u $SZOLGALTATAS -e" "$SZOLGALTATAS did not start - log: journalctl -u $SZOLGALTATAS -e")"
         fi
     done
+    if [ -n "$MAR_FUTOTT" ]; then
+        figyel "$(t "már előtte is futott:$MAR_FUTOTT - a frissített kód újraindítás után él" "already running before:$MAR_FUTOTT - the updated code takes over after a restart")"
+        mond "systemctl restart$MAR_FUTOTT"
+        mond "$(t '(a bsgo leállása kilépteti a játékosokat, a pilótákat elmenti)' '(stopping bsgo signs the players out, and saves the pilots)')"
+    fi
 fi
 
 printf '\n%s%s✔ %s%s\n' "$VASTAG" "$ZOLD" "$(t 'Kész.' 'Done.')" "$VEGE"
@@ -283,4 +350,5 @@ mond "$(t 'launcher:        ' 'launcher:        ')$ROOT/launcher/rebsgo-launcher
 mond "$(t 'webpanel:        http://<ez-a-gép>:27055/   (hálózati eléréshez a WebPanel/panel.env' 'webpanel:        http://<this-machine>:27055/   (for network access set')"
 mond "$(t '                 fájlban PANEL_HOST=0.0.0.0, vagy TLS-proxy mögé)' '                 PANEL_HOST=0.0.0.0 in WebPanel/panel.env, or put it behind a TLS proxy)')"
 mond "$(t 'beállítások:     ' 'settings:        ')$ROOT/.env"
+mond "$(t 'admin fiók:      ' 'admin account:   ')$ADMIN"
 exit 0

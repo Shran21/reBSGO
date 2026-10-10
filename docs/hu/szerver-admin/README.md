@@ -15,8 +15,8 @@ Console szereppel. Saját leírása: `docs/hu/webpanel/`.
 | Fájl | Témakör |
 |---|---|
 | `uzemeltetes.md` | indítás, leállítás, naplók, futás közbeni állítások |
-| `fiokok.md` | fiókok, jelszavak, szerepek, kitiltás |
-| `mentes-telepites.md` | mentés, hordozható csomag, telepítés új gépre |
+| `fiokok.md` | fiókok és az első admin fiók, jelszavak, szerepek, kitiltás |
+| `mentes-telepites.md` | mentés, hordozható csomag, telepítés új gépre (egy paranccsal is), frissítés |
 
 A fejlesztői konzol parancsai a `docs/hu/devconsole/`, a WebPanel fülről fülre
 haladó leírása a `docs/hu/webpanel/` mappában van.

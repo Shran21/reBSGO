@@ -6,11 +6,19 @@ Magyar · [English](#english)
 
 Nem hivatalos projekt, és nem áll kapcsolatban az eredeti jogtulajdonosokkal. A kliens és a kliens fájljai nem részei a repónak.
 
-## Telepítés
+## Egyszerű telepítés
 
-    ./install.sh
+Linuxon, rootként, egyetlen paranccsal:
 
-A telepítő megkérdezi a célmappát, a többit magától elvégzi: kibontja a csomagolt Python 3.13-at (rendszer-Python nem kell hozzá), ellenőrzi a natív gyorsítómodult, felépíti a panel környezetét, elkészíti a `.env`-et, végül telepíti és elindítja a `bsgo` és a `rebsgo-panel` szolgáltatást. Hálózati kapcsolat nélkül is végigfut.
+    curl -fsSL https://raw.githubusercontent.com/Shran21/reBSGO/main/install-basic.sh | sudo sh
+
+Letölti a repót és elindítja a telepítőt. Csak a célmappát (Enter = `/opt/rebsgo`) és az első admin fiókot kérdezi, a többit magától elvégzi. Ahol nincs `curl`: `wget -qO- … | sudo sh`. Ugyanez a parancs frissít is: a kód lecserélődik, a `.env`, az `sqlite/` és a helyi beállítások maradnak.
+
+## Telepítés letöltött vagy klónozott fából
+
+    sh install.sh
+
+A telepítő megkérdezi a célmappát, a többit magától elvégzi: kibontja a csomagolt Python 3.13-at (rendszer-Python nem kell hozzá), ellenőrzi a natív gyorsítómodult, felépíti a panel környezetét, elkészíti a `.env`-et, bekéri az első admin fiókot (ezzel lehet belépni a WebPanelbe), végül telepíti és elindítja a `bsgo` és a `rebsgo-panel` szolgáltatást. Hálózati kapcsolat nélkül is végigfut. Az `sh` előtag miatt akkor is elindul, ha a fájl futtatási joga útközben elveszett, például Windowsról feltöltve.
 
 | Szolgáltatás | Cím |
 |---|---|
@@ -79,11 +87,19 @@ A **Battlestar Galactica Online** game server in Python for the original Unity c
 
 An unofficial project, not affiliated with the original rights holders. The client and its files are not part of the repository.
 
-### Installation
+### Easy installation
 
-    ./install.sh
+On Linux, as root, with a single command:
 
-The installer asks for the target directory and does the rest on its own: it unpacks the bundled Python 3.13 (no system Python needed), checks the native accelerator module, builds the panel's environment, writes `.env`, then installs and starts the `bsgo` and `rebsgo-panel` services. It runs through without a network connection.
+    curl -fsSL https://raw.githubusercontent.com/Shran21/reBSGO/main/install-basic.sh | sudo sh
+
+It downloads the repository and starts the installer. The only questions are the target directory (Enter = `/opt/rebsgo`) and the first admin account; it does the rest on its own. Where there is no `curl`: `wget -qO- … | sudo sh`. The same command updates as well: the code is replaced, while `.env`, `sqlite/` and the local settings stay.
+
+### Installing from a downloaded or cloned tree
+
+    sh install.sh
+
+The installer asks for the target directory and does the rest on its own: it unpacks the bundled Python 3.13 (no system Python needed), checks the native accelerator module, builds the panel's environment, writes `.env`, asks for the first admin account (the one that signs in to the WebPanel), then installs and starts the `bsgo` and `rebsgo-panel` services. It runs through without a network connection. Started with `sh`, it runs even if the file lost its execute permission on the way, uploaded from Windows for one.
 
 | Service | Address |
 |---|---|
@@ -132,7 +148,7 @@ Python 3.13, bundled with the package; the server is built on the standard libra
 - Project page: <https://github.com/Shran21/reBSGO>
 - Email: [shranit.dev@gmail.com](mailto:shranit.dev@gmail.com)
 
-The **WEBOLDAL** and **KAPCSOLAT** links along the bottom of the launcher lead to the same two places.
+The **WEBSITE** and **CONTACTS** links along the bottom of the launcher lead to the same two places.
 
 ### Licence
 

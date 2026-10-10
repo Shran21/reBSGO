@@ -2,10 +2,10 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
-runtime/
-cache/
-logs/
-sqlite/
+/runtime/
+/cache/
+/logs/
+/sqlite/
 .env
 WebPanel/venv/
 WebPanel/panel.env

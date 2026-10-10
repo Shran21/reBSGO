@@ -21,6 +21,10 @@ Anyone with neither gets the very same sentence as somebody who typed the
 wrong password — deliberately, so that accounts cannot be mapped out from
 outside.
 
+On a fresh server the installer asks for the first such account. If that was
+left out, the command line makes one: `tools/pilots.py create <name> --grant
+Developer,Console` (details: `docs/en/server-admin/accounts.md`).
+
 - A login lasts **12 hours**, and renews itself automatically during use.
 - **Ten attempts a minute** are allowed per address.
 - Every sign-in, refusal and write goes into the panel's audit
