@@ -55,9 +55,9 @@ telepítő maga adja vissza.
 A telepítő hálózat nélkül dolgozik:
 
 1. kibontja a **hozott Python 3.13-at** a `runtime/python` alá. Ez
-   x86_64-re készült: más processzoron (például Raspberry Pi-n, ARM-on), vagy
-   ha nincs csomagolt értelmező, a rendszer python3-at használja (3.11 vagy
-   újabb kell; a natív gyorsítómodulhoz x86_64 és 3.13);
+   x86_64-re készült: más processzoron, vagy ha nincs csomagolt értelmező,
+   a rendszer python3-at használja (3.11 vagy újabb kell; a natív
+   gyorsítómodulhoz x86_64 és 3.13);
 2. létrehozza a mappákat, futtathatóvá teszi a szkripteket (`install.sh`,
    `WebPanel/run.sh`, `tools/*.py`), és ha nincs `.env`, generál egyet friss
    panel-tokennel — ezt csak a tulajdonosa olvashatja —, és bekapcsolja
@@ -66,8 +66,8 @@ A telepítő hálózat nélkül dolgozik:
 3. ellenőrzi, hogy a szerverkód betölt-e, és hogy a **natív gyorsítómodul**
    (`native/lib`, a fában szállítva) aktív-e;
 4. felépíti a panel venv-jét a `WebPanel/vendor/wheels` készletből (ami
-   ebből nem illik a géphez — ARM-on, vagy nem 3.13-as Pythonnal —, azt a
-   PyPI-ról tölti le, ehhez hálózat kell), és
+   ebből nem illik a géphez — más processzoron, vagy nem 3.13-as
+   Pythonnal —, azt a PyPI-ról tölti le, ehhez hálózat kell), és
    megírja a `WebPanel/panel.env`-et: a panel csak a saját gépéről nyílik
    (`PANEL_HOST=127.0.0.1`), a fájlt csak a tulajdonosa olvashatja;
 5. ha még nincs Developer szerepű fiók, bekéri az **első admin fiókot**
@@ -87,11 +87,6 @@ ront el; meglévő telepítésre másolva a kód frissül, a `.env`, a világál
 kérdezi, ha még nincs Developer szerepű fiók. Egy félbeszakadt korábbi
 futás nyomait is rendbe teszi: a gépen nem induló értelmezőt törli, az üres
 panel-tokent pótolja, a félkész venv-et újraépíti.
-
-**Raspberry Pi (ARM):** 64 bites Raspberry Pi OS ajánlott. A telepítő a
-rendszer Pythonját használja (ha a venv nem jön létre:
-`apt install python3-venv`), a panel csomagjait a hálózatról tölti le, a
-szerver pedig a natív gyorsítómodul nélkül, tiszta Pythonon fut.
 
 **Szektor-altatás.** A szerver magától minden szektort teljes sebességgel
 szimulál, azokat is, ahol senki sincs; ezt egy kisebb gép nem bírja. Ezért a

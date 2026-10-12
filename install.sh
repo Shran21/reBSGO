@@ -140,7 +140,7 @@ ROOT="$TARGET"
 fazis "$(t 'Python — az értelmező' 'Python — the interpreter')"
 GEP=$(uname -m)
 # A Python 3.11 or newer that really starts here: one built for another
-# processor (the bundled x86_64 one on a Raspberry Pi) is executable on paper
+# processor (the bundled x86_64 one on an ARM machine) is executable on paper
 # and fails on every call.
 fut() { "$1" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' >/dev/null 2>&1; }
 PYTHON="$ROOT/runtime/python/bin/python3"
@@ -291,9 +291,9 @@ elif [ "$CHECK" = 0 ]; then
     DARAB=$(ls "$ROOT"/WebPanel/vendor/wheels/*.whl 2>/dev/null | wc -l)
     mond "$(t "venv létrehozása, majd a panel csomagjai: elsőként a hozott $DARAB wheel, hálózat nélkül" "creating the venv, then the panel's packages: the $DARAB bundled wheels first, with no network")"
     "$PYTHON" -m venv "$VENV" \
-        || fail "$(t 'a venv létrehozása nem sikerült (Debianon, Raspberry Pi OS-en: apt install python3-venv)' 'the venv could not be created (on Debian, Raspberry Pi OS: apt install python3-venv)')"
+        || fail "$(t 'a venv létrehozása nem sikerült (Debianon, Ubuntun: apt install python3-venv)' 'the venv could not be created (on Debian, Ubuntu: apt install python3-venv)')"
     # The bundled wheels are built for x86_64 and Python 3.13. Anywhere else,
-    # whatever does not fit comes from PyPI (on Raspberry Pi OS from piwheels).
+    # whatever does not fit comes from PyPI.
     if "$VENV/bin/pip" install --quiet --disable-pip-version-check --no-index \
             --find-links "$ROOT/WebPanel/vendor/wheels" \
             -r "$ROOT/WebPanel/requirements.txt" 2>/dev/null; then

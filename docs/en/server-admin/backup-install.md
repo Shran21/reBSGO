@@ -58,8 +58,8 @@ get theirs back from the installer itself.
 The installer works without a network:
 
 1. it unpacks the **Python 3.13 it brought along** under `runtime/python`.
-   That one is built for x86_64: on another processor (a Raspberry Pi, ARM),
-   or when no interpreter is bundled, it uses the system python3 (3.11 or
+   That one is built for x86_64: on another processor, or when no
+   interpreter is bundled, it uses the system python3 (3.11 or
    newer is needed; the native accelerator module needs x86_64 and 3.13);
 2. it creates the folders, makes the scripts executable (`install.sh`,
    `WebPanel/run.sh`, `tools/*.py`), and if there is no `.env`, it
@@ -69,8 +69,9 @@ The installer works without a network:
 3. it checks that the server code loads and that the **native accelerator
    module** (`native/lib`, shipped in the tree) is active;
 4. it builds the panel's venv from the `WebPanel/vendor/wheels` set
-   (whatever there does not fit the machine — on ARM, or with a Python other
-   than 3.13 — comes from PyPI, which needs a network), and
+   (whatever there does not fit the machine — on another processor, or
+   with a Python other than 3.13 — comes from PyPI, which needs a
+   network), and
    writes `WebPanel/panel.env`: the panel opens on its own machine only
    (`PANEL_HOST=127.0.0.1`), and only the file's owner can read it;
 5. if no account has the Developer role yet, it asks for the **first admin
@@ -92,11 +93,6 @@ local settings. It only asks for an admin account while no account has the
 Developer role. It also tidies up after an interrupted earlier run: it
 removes an interpreter that does not start on the machine, fills in an empty
 panel token, and rebuilds a half-built venv.
-
-**Raspberry Pi (ARM):** the 64-bit Raspberry Pi OS is recommended. The
-installer uses the system's Python (if the venv cannot be made:
-`apt install python3-venv`), fetches the panel's packages from the network,
-and the server runs on plain Python, without the native accelerator module.
 
 **Sector gating.** On its own the server simulates every sector at full
 speed, the empty ones too, and a smaller machine cannot keep up with that. So
