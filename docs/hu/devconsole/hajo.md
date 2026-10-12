@@ -4,18 +4,26 @@
 
 ## Saját hajó
 
-    ship.invulnerable <0|1>          → sebezhetetlenség (GodMode); a kliens
+    ship.invulnerable <true|false>   → sebezhetetlenség (GodMode); a kliens
                                        god_mode gombja is ezt küldi
+                                       pl. ship.invulnerable true
     ship.buff <típus>                → buff a saját hajóra (self_buff gomb)
+                                       pl. ship.buff heal
+                                       (típusok: speed, heal, dmg, range,
+                                       cooldown, dispell)
     ship.max-gear <név>              → a megnevezett pilóta hajója max
                                        felszereltségre
+                                       pl. ship.max-gear Vega
     ship.speed <érték>               → sebesség-állítás próbához
+                                       pl. ship.speed 150
     ship.teleport <név> <táv>        → teleport a megnevezetthez adott
                                        távolságra
+                                       pl. ship.teleport Vega 500
     ship.teleport-centre             → teleport a szektor közepére
-    ship.visibility <0|1> [indok]    → a saját hajó láthatóság-kapcsolója
-    ship.fly <guid>                  → átülés a megadott hajókártyába
-    ship.fly-for <név> <guid>        → másik pilóta átültetése
+    ship.visibility <true|false> <ok>
+                                     → a saját hajó láthatóság-kapcsolója
+                                       pl. ship.visibility false Default
+                                       (ok: Default, Jump, Death, Anchor)
 
 ## Célpont-műveletek (előbb jelölj célt a játékban)
 
@@ -24,25 +32,34 @@
                                        (kill_target gomb)
     target.loot                      → a célpont zsákmányának kiszórása
                                        (loot_target gomb)
-    target.scan-all                  → minden objektum felfedése neked
-    target.scan-all-for <név>        → ugyanez a megnevezettnek
+    target.scan-all                  → a szektorod összes aszteroidájának és
+                                       kisbolygójának beszkennelése; ehhez
+                                       nem kell célpont, csak űrben kell
+                                       lenned. Utána mindegyiknél látod,
+                                       milyen nyersanyag van benne, a
+                                       kisbolygóknál azt is, hogy
+                                       bányászható-e még
+    target.scan-all-for <név>        → ugyanez a megnevezett pilótának, az
+                                       ő szektorában
+                                       pl. target.scan-all-for Vega
     object.mark <0|1>                → a célpont kiemelés-jelölése
-    object.report <név> <guid> <szint>
-                                     → tárgy-jelentés a megnevezett
-                                       raktárából
-    object.report-guid <név> <guid>  → tárgy-jelentés guid szerint
+                                       pl. object.mark 1
 
-## Lőszer és fogyóeszköz (a kliens consumable gombja az ammo.give)
+## Lőszer és fogyóeszköz
 
-    ammo.give <név> <guid> <darab>   → adott fogyóeszköz adása
-    ammo.weapons                     → fegyver-lőszereid feltöltése
-    ammo.hull                        → burkolat-javítók feltöltése
-    ammo.computer                    → számítógép-fogyók feltöltése
-    ammo.engine                      → hajtómű-fogyók feltöltése
-    ammo.all                         → minden fogyóeszközöd feltöltése
+    ammo.weapons <név> <darab>       → fegyver-lőszer a megnevezettnek
+                                       pl. ammo.weapons Vega 50
+    ammo.hull <név> <darab>          → burkolat-javító a megnevezettnek
+                                       pl. ammo.hull Vega 10
+    ammo.computer <név> <darab>      → számítógép-fogyó a megnevezettnek
+                                       pl. ammo.computer Vega 10
+    ammo.engine <név> <darab>        → hajtómű-fogyó a megnevezettnek
+                                       pl. ammo.engine Vega 10
+    ammo.all <név> <darab>           → minden fogyóeszköz a megnevezettnek
+                                       pl. ammo.all Vega 20
 
 ## Egyéb
 
     augment.try                      → augment-próba
-    refund.all <lvl1_guid>           → fejlesztési lánc visszatérítése
     skill_learn / skill_unlearn      → a pilot.train / pilot.untrain gomb-nevei
+                                       pl. skill_learn 0

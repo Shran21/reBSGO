@@ -22,8 +22,8 @@ gépezetet hajtja, ugyanazokkal a jogokkal.
 - A legtöbb szektor-kötött parancs (spawn, aszteroida, esemény) **abban a
   szektorban** hat, ahol a kiadója éppen repül — a WebPanel konzoljából ezek
   csak akkor mennek, ha a panelbe belépett pilóta bent van a játékban.
-- A kliens 16 beégetett gomb-parancsnevet is küld (pl. `consumable`,
-  `god_mode`, `spawn_comet`) — ezek a megfelelő pontos parancsok álnevei,
+- A kliens 16 beégetett gomb-parancsnevet is küld (pl. `kill_target`,
+  `god_mode`, `loot_target`) — ezek a megfelelő pontos parancsok álnevei,
   a fájlokban a rendes nevüknél említjük őket.
 - Saját álneveket a `GameData/local/console_aliases.json` fájlban lehet
   felvenni (gépenkénti fájl; a telepítő a meglévőt nem írja felül).
@@ -36,4 +36,4 @@ gépezetet hajtja, ugyanazokkal a jogokkal.
 | `szektor.md` | szektor-műveletek, aszteroidák, támaszpont-készültség |
 | `pilota.md` | pilóta-adminisztráció, XP, nyersanyag, posta, boostok |
 | `hajo.md` | saját hajó, célpont-műveletek, lőszer |
-| `szerver.md` | szerver-szintű parancsok, közlemények, számlálók |
+| `szerver.md` | szerver-szintű parancsok, közlemények |

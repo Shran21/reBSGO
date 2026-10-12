@@ -4,13 +4,8 @@
 
 Every command acts in the issuer's **own sector**, unless stated otherwise.
 
-## Event and outpost
+## Outpost
 
-    sector.event                     → ARMS the freighter event here. A
-                                       marker and a zone appear; it starts
-                                       when a pilot flies into the zone. In
-                                       an empty sector the request fades
-                                       away.
     outpost.points <colonial|cylon> <points>
                                      → readiness points ± in this sector
                                        (the scale is 0–3000; from 900 the
@@ -23,24 +18,26 @@ Example: `outpost.points cylon 1500`
 ## Getting your bearings
 
     sector.census                    → object census of the sector
-    sector.zones                     → zone information (★ Developer)
     asteroid.ore-report              → report on the ore-bearing asteroids
-    sector.template                  → prints the sector's template data
 
 ## Travel
 
     sector.jump <sector_id>          → instant jump into the given sector
+                                       e.g. sector.jump 21
     sector.jump-notice <error_code> <reason>
                                      → test of a jump-refusal message
+                                       e.g. sector.jump-notice 2 7
 
 ## Asteroid generation
 
     sector.fill <seed> <asteroid> <planetoid> <fields> <count/field> <field_size> <loops> <loop_size> <count/loop>
         → a full sector scatter with nine integers; <seed> is the
           random seed, so the same number gives the same picture.
+          e.g. sector.fill 42 4 1 1 5 400 1 500 6
 
     asteroid.tendril <seed> <from_centre> <count> <tendrils> <angle>
         → a tendril-shaped asteroid cluster
+          e.g. asteroid.tendril 7 2000 10 3 15
 
     asteroid.ring <seed> <from_centre> <count> <inner> <outer> <angle>
         → a ring shape between the inner and outer radius
@@ -48,7 +45,6 @@ Example: `outpost.points cylon 1500`
     asteroid.unstick                 → pushes stuck (colliding) asteroids apart
     asteroid.clear                   → deletes every asteroid
     asteroid.clear-water             → deletes only the water-bearing ones
-    planet.mining-rig                → test of the mining rig on the planetoid
 
 Example: `asteroid.ring 42 0 120 800 1600 15`
 

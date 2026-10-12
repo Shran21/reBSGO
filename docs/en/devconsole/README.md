@@ -23,7 +23,7 @@ same server-side machinery, with the same permissions.
   where the issuer happens to be flying — from the WebPanel console these
   only work if the pilot logged into the panel is in the game.
 - The client also sends 16 hard-wired button command names (e.g.
-  `consumable`, `god_mode`, `spawn_comet`) — these are aliases of the
+  `kill_target`, `god_mode`, `loot_target`) — these are aliases of the
   matching exact commands, and the files mention them under their proper
   names.
 - You can add your own aliases in `GameData/local/console_aliases.json`
@@ -37,4 +37,4 @@ same server-side machinery, with the same permissions.
 | `sectors.md` | sector operations, asteroids, outpost readiness |
 | `pilots.md` | pilot administration, XP, resources, mail, boosts |
 | `ships.md` | your own ship, target operations, ammunition |
-| `server.md` | server-level commands, notices, tallies |
+| `server.md` | server-level commands, notices |
