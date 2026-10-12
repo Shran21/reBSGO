@@ -16,7 +16,7 @@ own write-up: `docs/en/webpanel/`.
 |---|---|
 | `operations.md` | starting, stopping, logs, changes while running |
 | `accounts.md` | accounts and the first admin account, passwords, roles, bans |
-| `backup-install.md` | backup, portable package, install on a new machine (with one command too), updating |
+| `backup-install.md` | backup, portable package, install on a new machine (with one command too), updating, uninstalling |
 
 The developer console's commands are in `docs/en/devconsole/`, and the
 tab-by-tab write-up of the WebPanel is in `docs/en/webpanel/`.

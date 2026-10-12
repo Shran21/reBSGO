@@ -284,8 +284,10 @@ _szintkapu_cache: int | None = None
 
 
 def _wheel_tabla() -> dict:
-    return json.loads(GameDataLoader("GameData/templates/wheel_prizes.json")
-                      .template_path.read_text(encoding="utf-8"))
+    # Through the loader, not straight off the disk: on a released server the
+    # templates live inside gamedata.pak, and there is no such file to open.
+    betolto = GameDataLoader("GameData/templates/wheel_prizes.json")
+    return json.loads(betolto.raw_text(betolto.template_path))
 
 
 def _wheel_min_level() -> int:

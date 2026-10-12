@@ -320,6 +320,37 @@ class SqliteRecords(Records, Zarhato):
             finally:
                 conn.close()
 
+    def character_on_file(self, user_id: int) -> bool:
+        """Whether the pilot has a character made: a side picked and a hangar written.
+
+        An account made by the launcher's registration, the panel or
+        tools/pilots.py has its row in pilots - a name, a password, perhaps
+        roles - and nothing to fly yet. Such a pilot goes through the faction
+        choice and the avatar like a new player; loaded as a returning one, it
+        falls over on the missing side and the missing hangar.
+        """
+        with self._olvasva:
+            conn = self._data_source.connection()
+            try:
+                sor = conn.execute(
+                    "SELECT 1 FROM pilots p JOIN hangar_state h ON h.player_id = p.id"
+                    " WHERE p.id=? AND p.faction IN (?, ?) LIMIT 1",
+                    (user_id, Faction.Colonial.value, Faction.Cylon.value)).fetchone()
+                return sor is not None
+            finally:
+                conn.close()
+
+    def stored_account(self, user_id: int):
+        """The name and the role bits on an account's row, or None without one."""
+        with self._olvasva:
+            conn = self._data_source.connection()
+            try:
+                sor = conn.execute("SELECT name, roles_bits FROM pilots WHERE id=?",
+                                   (user_id,)).fetchone()
+                return None if sor is None else (sor["name"] or "", int(sor["roles_bits"] or 0))
+            finally:
+                conn.close()
+
     def refresh_avatar(self, user_id: int, avatar_description) -> None:
         self._write_avatar(avatar_description, user_id)
 
@@ -414,10 +445,11 @@ class SqliteRecords(Records, Zarhato):
             conn.close()
         return True
 
-    def name_taken_ignoring_case(self, name: str) -> bool:
+    def name_taken_ignoring_case(self, name: str, kiveve: int | None = None) -> bool:
         conn = self._data_source.connection()
         try:
-            sor = conn.execute("SELECT 1 FROM pilots WHERE name COLLATE NOCASE = ? LIMIT 1", (name,)).fetchone()
+            sor = conn.execute("SELECT 1 FROM pilots WHERE name COLLATE NOCASE = ? AND id IS NOT ? LIMIT 1",
+                               (name, kiveve)).fetchone()
             return sor is not None
         except Exception:
             log.exception("the case-insensitive name check would not run")

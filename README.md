@@ -12,7 +12,7 @@ Linuxon, rootként, egyetlen paranccsal:
 
     curl -fsSL https://raw.githubusercontent.com/Shran21/reBSGO/main/install-basic.sh | sudo sh
 
-Letölti a repót és elindítja a telepítőt. Csak a célmappát (Enter = `/opt/rebsgo`) és az első admin fiókot kérdezi, a többit magától elvégzi. Ahol nincs `curl`: `wget -qO- … | sudo sh`. Ugyanez a parancs frissít is: a kód lecserélődik, a `.env`, az `sqlite/` és a helyi beállítások maradnak.
+Letölti a repót és elindítja a telepítőt. Csak a célmappát (Enter = `/opt/rebsgo`) és az első admin fiókot kérdezi, a többit magától elvégzi. Ahol nincs `curl`: `wget -qO- … | sudo sh`. Ugyanez a parancs frissít is: a kód lecserélődik, a `.env`, az `sqlite/` és a helyi beállítások maradnak. Raspberry Pi-n (ARM) is működik: ott a rendszer Pythonját használja, a panel csomagjait a hálózatról tölti le, a szerver pedig a natív gyorsítómodul nélkül fut.
 
 ## Telepítés letöltött vagy klónozott fából
 
@@ -28,6 +28,12 @@ A telepítő megkérdezi a célmappát, a többit magától elvégzi: kibontja a
 | beállítások | `.env`, a kulcsok katalógusa a `.env.example` |
 
 Bővebben: [telepítés és mentés](docs/hu/szerver-admin/mentes-telepites.md).
+
+## Eltávolítás
+
+    sudo sh /opt/rebsgo/uninstall.sh
+
+Leállítja és eltávolítja a `bsgo` és a `rebsgo-panel` szolgáltatást, majd megkérdezi, mi maradjon: az adatok a helyükön (egy újabb telepítés ugyanide visszakapja őket), egy `.tar.gz` mentés, vagy semmi.
 
 ## A repó tartalma
 
@@ -93,7 +99,7 @@ On Linux, as root, with a single command:
 
     curl -fsSL https://raw.githubusercontent.com/Shran21/reBSGO/main/install-basic.sh | sudo sh
 
-It downloads the repository and starts the installer. The only questions are the target directory (Enter = `/opt/rebsgo`) and the first admin account; it does the rest on its own. Where there is no `curl`: `wget -qO- … | sudo sh`. The same command updates as well: the code is replaced, while `.env`, `sqlite/` and the local settings stay.
+It downloads the repository and starts the installer. The only questions are the target directory (Enter = `/opt/rebsgo`) and the first admin account; it does the rest on its own. Where there is no `curl`: `wget -qO- … | sudo sh`. The same command updates as well: the code is replaced, while `.env`, `sqlite/` and the local settings stay. It works on a Raspberry Pi (ARM) too: there it uses the system's Python, fetches the panel's packages from the network, and the server runs without the native accelerator module.
 
 ### Installing from a downloaded or cloned tree
 
@@ -109,6 +115,12 @@ The installer asks for the target directory and does the rest on its own: it unp
 | settings | `.env`, with every key catalogued in `.env.example` |
 
 More on this: [installation and backups](docs/en/server-admin/backup-install.md).
+
+### Uninstalling
+
+    sudo sh /opt/rebsgo/uninstall.sh
+
+It stops and removes the `bsgo` and `rebsgo-panel` services, then asks what should stay: the data in place (installing into the same directory again picks it up), a `.tar.gz` backup, or nothing.
 
 ### What the repository holds
 

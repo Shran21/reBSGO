@@ -7,7 +7,8 @@
 - **WebPanel** → Felhasználók → „+ Új fiók": név + frakció (vagy „választ a
   játékban") + jelszó. A fiók üresen jön létre; első belépéskor a játék
   viszi végig a frakcióválasztáson és az avatár-készítésen, és megkapja a
-  kezdőhajót.
+  kezdőhajót. A frakciót ilyenkor a játékos választja ki, a panelen
+  megadott érték csak tájékoztató.
 - **A launcherből** a játékos maga is regisztrálhat: a beléptető ajtó
   (alapból a 27051-es port) `POST /register` címe `name` és `password`
   mezőt vár, és `ok <azonosító>` sorral felel. Ugyanazokkal a névszabályokkal
@@ -19,6 +20,10 @@
       tools/pilots.py create Tuser             → jelszó bekérése rejtve
       tools/pilots.py create Tuser --grant Developer,Console
                                                → szerepekkel együtt
+
+Bármelyik úton készült a fiók, a karakter létrehozásakor megtartja a nevét és
+a szerepeit: a névválasztásnál a fiók saját neve marad a pilóta neve, és az
+admin fiók Developer/Console szerepe sem vész el az első mentéskor.
 
 ## Az első admin fiók
 

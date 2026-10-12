@@ -105,12 +105,14 @@ class NameRules:
             if not name_is_safe:
                 log.warning("Cheat name=%s is not safe; requested by user_id=%s", vizsgalt_nev, user_id)
                 return False
-            already_present = self._data_store.name_taken_ignoring_case(vizsgalt_nev)
+            already_present = self._data_store.name_taken_ignoring_case(vizsgalt_nev, kiveve=user_id)
             if already_present:
                 return False
             bejegyzes = NamedPilot(vizsgalt_nev, user_id)
-            if bejegyzes in self._reserved_names:
-                return False
+            for foglalas in self._reserved_names:
+                if foglalas == bejegyzes:
+                    # asked again by the one holding it - the client checks as the name is typed
+                    return foglalas.player_id == user_id
             self._reserved_names.add(bejegyzes)
             return True
 

@@ -20,6 +20,14 @@ class Records(ABC):
         ...
 
     @abstractmethod
+    def character_on_file(self, user_id: int) -> bool:
+        ...
+
+    @abstractmethod
+    def stored_account(self, user_id: int):
+        ...
+
+    @abstractmethod
     def refresh_avatar(self, user_id: int, avatar_description) -> None:
         ...
 
@@ -28,7 +36,7 @@ class Records(ABC):
         ...
 
     @abstractmethod
-    def name_taken_ignoring_case(self, name: str) -> bool:
+    def name_taken_ignoring_case(self, name: str, kiveve: int | None = None) -> bool:
         ...
 
     @abstractmethod

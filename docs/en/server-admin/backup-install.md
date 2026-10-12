@@ -54,15 +54,18 @@ get theirs back from the installer itself.
 
 The installer works without a network:
 
-1. it unpacks the **Python 3.13 it brought along** under `runtime/python`
-   (if that is missing, it uses the system python3 — 3.13 is needed for
-   the native accelerator module);
+1. it unpacks the **Python 3.13 it brought along** under `runtime/python`.
+   That one is built for x86_64: on another processor (a Raspberry Pi, ARM),
+   or when no interpreter is bundled, it uses the system python3 (3.11 or
+   newer is needed; the native accelerator module needs x86_64 and 3.13);
 2. it creates the folders, makes the scripts executable (`install.sh`,
    `WebPanel/run.sh`, `tools/*.py`), and if there is no `.env`, it
    generates one with a fresh panel token — readable by its owner only;
 3. it checks that the server code loads and that the **native accelerator
    module** (`native/lib`, shipped in the tree) is active;
-4. it builds the panel's venv from the `WebPanel/vendor/wheels` set, and
+4. it builds the panel's venv from the `WebPanel/vendor/wheels` set
+   (whatever there does not fit the machine — on ARM, or with a Python other
+   than 3.13 — comes from PyPI, which needs a network), and
    writes `WebPanel/panel.env`: the panel opens on its own machine only
    (`PANEL_HOST=127.0.0.1`), and only the file's owner can read it;
 5. if no account has the Developer role yet, it asks for the **first admin
@@ -81,7 +84,14 @@ Switches: `--check` (report only, change nothing), `--no-systemd`, `--dir`,
 installation and breaks nothing; copied onto an existing installation it
 refreshes the code and keeps `.env`, the world state (`sqlite/`) and the
 local settings. It only asks for an admin account while no account has the
-Developer role.
+Developer role. It also tidies up after an interrupted earlier run: it
+removes an interpreter that does not start on the machine, fills in an empty
+panel token, and rebuilds a half-built venv.
+
+**Raspberry Pi (ARM):** the 64-bit Raspberry Pi OS is recommended. The
+installer uses the system's Python (if the venv cannot be made:
+`apt install python3-venv`), fetches the panel's packages from the network,
+and the server runs on plain Python, without the native accelerator module.
 
 Starting afterwards:
 
@@ -91,6 +101,30 @@ or by hand:
 
     PYTHONPATH=src ./runtime/python/bin/python3 -m rebsgo.main
     ./WebPanel/run.sh
+
+## Uninstalling
+
+    sudo sh /opt/rebsgo/uninstall.sh
+
+`uninstall.sh` sits in the installation's directory. It stops the services
+(on the way out bsgo saves the pilots), removes the `bsgo` and `rebsgo-panel`
+units, and if the server or the panel runs by hand from this directory, it
+stops those properly too. Then it asks what should stay:
+
+1. **the data in place** (recommended): the program goes, while `sqlite/`,
+   `.env`, `WebPanel/panel.env` and `GameData/local` stay. Installing into
+   the same directory again gets all of it back: the players, the settings
+   and the admin account;
+2. **a backup, then everything goes**: the data goes into a `.tar.gz` (next
+   to the installation by default), and the directory is removed. Restoring
+   into a new installation, with its services stopped:
+   `tar xzf <backup> -C <directory>`;
+3. **everything goes, with no backup**: only after typing the word `delete`.
+
+With no questions: `--keep-data`, `--backup <file>` or `--purge`, with
+`--yes`; for another installation `--dir <directory>`. A service pointing at
+another directory is left alone, and so are the panel's backups
+(`PANEL_BACKUP_DIR`, `/opt/bsgo-backups` by default).
 
 ## Verified properties
 

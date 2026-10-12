@@ -44,9 +44,21 @@ class PilotRoster(Zarhato):
 
     def name_available(self, vizsgalt_nev: str, user_id: int) -> bool:
         with self._olvasva:
-            if self._get_internal(vizsgalt_nev) is not None:
+            if self._get_internal(vizsgalt_nev, kiveve=user_id) is not None:
                 return False
             return self._name_validation.name_is_free(vizsgalt_nev, user_id)
+
+    def _get_internal(self, nev: str, kiveve: int | None = None):
+        # Someone online under this name, the asker aside: an account made
+        # before its character arrives with its own name already on it.
+        keresett = nev.casefold()
+        for user in self._user_map.values():
+            player = user.pilot_of()
+            if player is None or player.user_id_of() == kiveve:
+                continue
+            if player.name.casefold() == keresett:
+                return user
+        return None
 
     def reserved_name_for(self, name: str, player_id: int) -> bool:
         with self._choose_name_lock:

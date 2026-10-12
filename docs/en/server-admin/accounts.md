@@ -7,7 +7,8 @@
 - **WebPanel** → Users → "+ New account": name + faction (or "picks a
   faction in the game") + password. The account is born bare; on first
   entry the game walks it through faction choice and avatar creation, and
-  hands out the starter ship.
+  hands out the starter ship. The player picks the faction there; the one
+  given in the panel is only a hint.
 - **From the launcher** a player can sign up on their own: the admission
   door (port 27051 by default) takes `POST /register` with a `name` and a
   `password`, and answers with an `ok <id>` line. It applies the game's own
@@ -20,6 +21,11 @@
       tools/pilots.py create Tuser             → prompts for the password, hidden
       tools/pilots.py create Tuser --grant Developer,Console
                                                → with roles in one go
+
+Whichever way the account was made, it keeps its name and its roles when the
+character is created: at the name step the pilot stays named after the
+account, and the admin account's Developer/Console roles survive the first
+save.
 
 ## The first admin account
 

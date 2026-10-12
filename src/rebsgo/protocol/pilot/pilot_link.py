@@ -208,8 +208,17 @@ class PlayerProtocol(BgoProtocol):
         name_chosen = br.read_string()
         player = self.user().pilot_of()
         if len(player.name) != 0:
-            log.error('%s Cheat Pilot tried to change name even though the name was already set! %s',
-                      self.user().user_log(), name_chosen)
+            # An account made by the launcher, the panel or tools/pilots.py comes
+            # with its name already set, and the client still walks through the
+            # name step and waits for an answer. The name stays what it was.
+            if name_chosen.casefold() != player.name.casefold():
+                log.warning('%s asked for the name %s, but the pilot is named already; it stays %s',
+                            self.user().user_log(), name_chosen, player.name)
+            self._pilot_roster.reserved_name_for(name_chosen, player.user_id_of())
+            self.user().send(self._writer.name(player.name))
+            community_protocol = self.user().protocol_of(ProtocolID.Community)
+            if community_protocol is not None:
+                community_protocol.resend_chat_session_id()
             return
         is_present = self._pilot_roster.reserved_name_for(
             name_chosen, player.user_id_of())

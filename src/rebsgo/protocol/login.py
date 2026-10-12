@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from datetime import datetime, timezone
 from enum import Enum
 from rebsgo.admission import reasons
@@ -169,67 +170,99 @@ class LoginProtocol(BgoProtocol):
                 log.warning("pilot %s arrives on an unlisted client build: %s",
                             player_id, client_build)
             hely = session_handling_result.session()
-            playerless_user = GuestSession(self.ctx.connection(), hely, self._protocol_desk)
-            self._pilot_roster.reserve_bare(player_id, playerless_user)
-
-            ex_user = self._find_returning_user(player_id)
-
-            if ex_user is None:
-                log.info('player %s arrives with no account on file', player_id)
-                mission_book = AssignmentLog(player_id, self._mission_updater)
-                player = Pilot(player_id, self.ctx.server_config, mission_book)
-                new_user = self._pilot_roster.pilot_born(player)
-
-                new_user.attach_link(self.ctx.connection())
-                new_user.attach_session(hely)
-                new_user.on_user_gone(self._user_disconnected_subscriber)
-                self.ctx.connection().send(self._writer.player(new_user.pilot_of().bgo_admin_roles))
-                new_user.protocol_desk.login_done(new_user)
-
-                end_time = datetime(2024, 1, 1, 0, 0, 0)
-
-                if (not new_user.pilot_of().factors.boosted_by(BoostSource.Holiday)
-                    and datetime.now(timezone.utc).replace(tzinfo=None) < end_time):
-                    new_user.pilot_of().factors.take_boost(
-                        Boost.ending_at(BoostKind.Loot, BoostSource.Holiday, 1.0, end_time))
-                    new_user.pilot_of().factors.take_boost(
-                        Boost.ending_at(BoostKind.Experience, BoostSource.Holiday, 1.0, end_time))
-                    new_user.pilot_of().factors.take_boost(
-                        Boost.ending_at(BoostKind.AsteroidYield, BoostSource.Holiday, 1.0, end_time))
-                    new_user.send(PilotReplies().factors(new_user.pilot_of().factors))
-
-                community_protocol = new_user.protocol_desk.protocol_of(ProtocolID.Community)
-                chat_server_url = self._chat_address_for_client(self.ctx)
-                community_protocol.push_chat_session("", 860, "us", chat_server_url)
-                community_protocol.push_friend_list()
-            else:
-                delete_was_pending = self._pilot_roster.release_bare(player_id) is not None
-                log.info(f'login name smuggled a delete character: {delete_was_pending}')
-                existing_user = ex_user
-                self.seed_user(existing_user)
-
-                if len(self.user().protocol_desk.all_protocols()) == 1:
-                    self._protocol_desk.login_done(self.user())
-                else:
-                    self._protocol_desk.restore_registry(self.user())
-
-                setting_protocol = self._protocol_desk.protocol_of(ProtocolID.Setting)
-                setting_protocol.push_settings()
-                self.user().attach_link(self.ctx.connection())
-                self.user().attach_session(hely)
-                self.user().send(self._writer.player(self.user().pilot_of().bgo_admin_roles))
-                player_protocol = self.user().protocol_of(ProtocolID.Pilot)
-                self.user().on_user_gone(self._user_disconnected_subscriber)
-                self._protocol_desk.restore_registry(self.user())
-                player_protocol.announce_character()
-                community_protocol = self._protocol_desk.protocol_of(ProtocolID.Community)
-                chat_server_url = self._chat_address_for_client(self.ctx)
-                community_protocol.push_chat_session("", 860, "us", chat_server_url)
-                community_protocol.push_friend_list()
+            elotte = self._pilot_roster.by_id(player_id)
+            try:
+                self._seat_pilot(player_id, hely)
+            except Exception:
+                log.exception('pilot %s could not be seated - the admission is given back', player_id)
+                self._give_back_admission(player_id, hely, elotte)
         elif login_protocol_client_message == LoginProtocolClientMessage.Echo:
             pass
         else:
             log.error("Unknown message_type in LoginProtocol.")
+
+    def _seat_pilot(self, player_id: int, hely) -> None:
+        playerless_user = GuestSession(self.ctx.connection(), hely, self._protocol_desk)
+        self._pilot_roster.reserve_bare(player_id, playerless_user)
+
+        ex_user = self._find_returning_user(player_id)
+
+        if ex_user is None:
+            log.info('player %s arrives with no character on file', player_id)
+            mission_book = AssignmentLog(player_id, self._mission_updater)
+            player = Pilot(player_id, self.ctx.server_config, mission_book)
+            fiok = self._data_store.stored_account(player_id)
+            if fiok is not None:
+                # An account made by the launcher, the panel or tools/pilots.py:
+                # the first save writes its pilots row over, so the name it logs
+                # in with and its roles have to come along into the new pilot.
+                nev, szerepek = fiok
+                if nev:
+                    player.name = nev
+                player.bgo_admin_roles.set_or(szerepek)
+            new_user = self._pilot_roster.pilot_born(player)
+
+            new_user.attach_link(self.ctx.connection())
+            new_user.attach_session(hely)
+            new_user.on_user_gone(self._user_disconnected_subscriber)
+            self.ctx.connection().send(self._writer.player(new_user.pilot_of().bgo_admin_roles))
+            new_user.protocol_desk.login_done(new_user)
+
+            end_time = datetime(2024, 1, 1, 0, 0, 0)
+
+            if (not new_user.pilot_of().factors.boosted_by(BoostSource.Holiday)
+                and datetime.now(timezone.utc).replace(tzinfo=None) < end_time):
+                new_user.pilot_of().factors.take_boost(
+                    Boost.ending_at(BoostKind.Loot, BoostSource.Holiday, 1.0, end_time))
+                new_user.pilot_of().factors.take_boost(
+                    Boost.ending_at(BoostKind.Experience, BoostSource.Holiday, 1.0, end_time))
+                new_user.pilot_of().factors.take_boost(
+                    Boost.ending_at(BoostKind.AsteroidYield, BoostSource.Holiday, 1.0, end_time))
+                new_user.send(PilotReplies().factors(new_user.pilot_of().factors))
+
+            community_protocol = new_user.protocol_desk.protocol_of(ProtocolID.Community)
+            chat_server_url = self._chat_address_for_client(self.ctx)
+            community_protocol.push_chat_session("", 860, "us", chat_server_url)
+            community_protocol.push_friend_list()
+        else:
+            delete_was_pending = self._pilot_roster.release_bare(player_id) is not None
+            log.info(f'login name smuggled a delete character: {delete_was_pending}')
+            existing_user = ex_user
+            self.seed_user(existing_user)
+
+            if len(self.user().protocol_desk.all_protocols()) == 1:
+                self._protocol_desk.login_done(self.user())
+            else:
+                self._protocol_desk.restore_registry(self.user())
+
+            setting_protocol = self._protocol_desk.protocol_of(ProtocolID.Setting)
+            setting_protocol.push_settings()
+            self.user().attach_link(self.ctx.connection())
+            self.user().attach_session(hely)
+            self.user().send(self._writer.player(self.user().pilot_of().bgo_admin_roles))
+            player_protocol = self.user().protocol_of(ProtocolID.Pilot)
+            self.user().on_user_gone(self._user_disconnected_subscriber)
+            self._protocol_desk.restore_registry(self.user())
+            player_protocol.announce_character()
+            community_protocol = self._protocol_desk.protocol_of(ProtocolID.Community)
+            chat_server_url = self._chat_address_for_client(self.ctx)
+            community_protocol.push_chat_session("", 860, "us", chat_server_url)
+            community_protocol.push_friend_list()
+
+    def _give_back_admission(self, player_id: int, hely, elotte) -> None:
+        # The ticket is redeemed by now. Left like this, it would hold the pilot
+        # "in the game" with nobody behind it, and every later login would be
+        # turned away until the server restarts.
+        self._pilot_roster.release_bare(player_id)
+        most = self._pilot_roster.by_id(player_id)
+        if most is not None and most is not elotte:
+            self._pilot_roster.remove(most)
+        hely.elhagyja()
+        connection = self.ctx.connection()
+        with suppress(Exception):
+            connection.send(self._writer.login_error(
+                LoginError.Unknown, 'the server could not load this pilot'))
+        connection.close_connection('the pilot could not be seated')
 
     def _chat_address_for_client(self, ctx) -> str:
         cim = (ctx.server_config.chat_server_address or "").strip()
@@ -263,7 +296,7 @@ class LoginProtocol(BgoProtocol):
 
     def _find_returning_user(self, user_id: int):
         elo = self._pilot_roster.by_id(user_id)
-        if elo is None and self._data_store.user_present(user_id):
+        if elo is None and self._data_store.character_on_file(user_id):
             elo = self._pilot_roster.pilot_born(
                 self._data_store.stored_pilot(user_id))
         return elo

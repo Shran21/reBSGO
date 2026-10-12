@@ -134,28 +134,45 @@ else
 fi
 ROOT="$TARGET"
 
-fazis "$(t 'Python — a csomagolt értelmező' 'Python — the bundled interpreter')"
+fazis "$(t 'Python — az értelmező' 'Python — the interpreter')"
+GEP=$(uname -m)
+# A Python 3.11 or newer that really starts here: one built for another
+# processor (the bundled x86_64 one on a Raspberry Pi) is executable on paper
+# and fails on every call.
+fut() { "$1" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' >/dev/null 2>&1; }
 PYTHON="$ROOT/runtime/python/bin/python3"
-if [ -x "$PYTHON" ]; then
+TARBALL=$(ls "$ROOT"/vendor/python/cpython-*.tar.gz 2>/dev/null | head -1)
+if fut "$PYTHON"; then
     kesz "$(t 'már ki van bontva:' 'already unpacked:') $("$PYTHON" -V 2>&1)"
+elif [ -n "$TARBALL" ] && case "$(basename "$TARBALL")" in *"-$GEP-"*) true ;; *) false ;; esac; then
+    mond "$(t 'kibontás:' 'unpacking:') $(basename "$TARBALL")"
+    if [ "$CHECK" = 0 ]; then
+        rm -rf "$ROOT/runtime/python"
+        kibonto "$TARBALL" "$ROOT/runtime"
+        fut "$PYTHON" || fail "$(t 'a kibontott értelmező nem indul' 'the unpacked interpreter does not start')"
+        kesz "$(t 'kész:' 'done:') $("$PYTHON" -V 2>&1)"
+    else
+        mond "$(t '(kibontaná ide: runtime/)' '(it would unpack into runtime/)')"
+    fi
 else
-    TARBALL=$(ls "$ROOT"/vendor/python/cpython-*.tar.gz 2>/dev/null | head -1)
-    if [ -n "${TARBALL:-}" ]; then
-        mond "$(t 'kibontás:' 'unpacking:') $(basename "$TARBALL")"
-        if [ "$CHECK" = 0 ]; then
-            kibonto "$TARBALL" "$ROOT/runtime"
-            [ -x "$PYTHON" ] || fail "$(t 'az értelmező nem oda bomlott ki, ahová vártuk' 'the interpreter did not unpack where it was expected')"
-            kesz "$(t 'kész:' 'done:') $("$PYTHON" -V 2>&1)"
-        else
-            mond "$(t '(kibontaná ide: runtime/)' '(it would unpack into runtime/)')"
-        fi
+    if [ -n "$TARBALL" ]; then
+        figyel "$(t "a csomagolt értelmező másik processzorra készült, ez a gép $GEP - a rendszer python3-at használom" "the bundled interpreter was built for another processor, this machine is $GEP - using the system python3")"
     else
         figyel "$(t 'nincs csomagolt értelmező; a rendszer python3-ra váltok' 'no bundled interpreter; falling back to the system python3')"
-        PYTHON=$(command -v python3) || fail "$(t 'ezen a gépen nincs python3, és csomagolt sincs' 'this machine has no python3, and none is bundled')"
-        kesz "$(t 'rendszer-értelmező:' 'system interpreter:') $("$PYTHON" -V 2>&1)"
     fi
+    if [ -e "$ROOT/runtime/python" ] && [ "$CHECK" = 0 ]; then
+        rm -rf "$ROOT/runtime/python"
+        mond "$(t 'egy korábbi futás itt nem induló értelmezője törölve: runtime/python' "an earlier run's interpreter that does not start here was removed: runtime/python")"
+    fi
+    PYTHON=$(command -v python3) \
+        || fail "$(t 'ezen a gépen nincs python3 - telepítsd: apt install python3 python3-venv' 'this machine has no python3 - install it: apt install python3 python3-venv')"
+    fut "$PYTHON" \
+        || fail "$(t "3.11 vagy újabb Python kell, ez: $("$PYTHON" -V 2>&1)" "Python 3.11 or newer is needed, this one is: $("$PYTHON" -V 2>&1)")"
+    kesz "$(t 'rendszer-értelmező:' 'system interpreter:') $PYTHON, $("$PYTHON" -V 2>&1)"
 fi
-if [ -x "$PYTHON" ]; then
+NATIV_ITT=0
+ls "$ROOT"/native/lib/rebsgo_native*"-$GEP-"*.so >/dev/null 2>&1 && NATIV_ITT=1
+if [ "$NATIV_ITT" = 1 ] && fut "$PYTHON"; then
     case "$("$PYTHON" -V 2>&1)" in
         *" 3.13."*) : ;;
         *) figyel "$(t 'a natív modul cp313-ra épült; más verzióval a gyorsítás kimarad' 'the native module was built for cp313; another version leaves the acceleration out')" ;;
@@ -164,8 +181,10 @@ fi
 
 fazis "$(t 'Szerverfa és mappák' 'The server tree and its directories')"
 [ -d "$ROOT/src/rebsgo" ] || fail "$(t 'src/rebsgo hiányzik - ez nem egy szerverfa?' 'src/rebsgo is missing - is this a server tree?')"
-if ls "$ROOT"/native/lib/rebsgo_native*.so >/dev/null 2>&1; then
+if [ "$NATIV_ITT" = 1 ]; then
     kesz "$(t 'natív gyorsítómodul: megvan (native/lib)' 'native accelerator module: present (native/lib)')"
+elif ls "$ROOT"/native/lib/rebsgo_native*.so >/dev/null 2>&1; then
+    figyel "$(t "a natív modul másik processzorra készült ($GEP-re nincs) - tiszta-python tartalékon fut (lassabb, de teljes)" "the native module was built for another processor (none for $GEP) - running on the pure-python fallback (slower, but complete)")"
 else
     figyel "$(t 'natív modul nincs - tiszta-python tartalékon fut (lassabb, de teljes)' 'no native module - running on the pure-python fallback (slower, but complete)')"
 fi
@@ -176,23 +195,35 @@ kesz "$(t 'mappák: logs/ sqlite/ WebPanel/logs/' 'directories: logs/ sqlite/ We
 # GitHub's upload page and a Windows checkout both drop the execute bit, and
 # systemd will not start WebPanel/run.sh without it.
 if [ "$CHECK" = 0 ]; then
-    chmod +x "$ROOT/install.sh" "$ROOT/WebPanel/run.sh" "$ROOT"/tools/*.py 2>/dev/null
-    kesz "$(t 'futtatható: install.sh, WebPanel/run.sh, tools/*.py' 'executable: install.sh, WebPanel/run.sh, tools/*.py')"
+    chmod +x "$ROOT/install.sh" "$ROOT/uninstall.sh" "$ROOT/WebPanel/run.sh" "$ROOT"/tools/*.py 2>/dev/null
+    kesz "$(t 'futtatható: install.sh, uninstall.sh, WebPanel/run.sh, tools/*.py' 'executable: install.sh, uninstall.sh, WebPanel/run.sh, tools/*.py')"
 else
-    mond "$(t '(futtathatóvá tenné: install.sh, WebPanel/run.sh, tools/*.py)' '(it would make these executable: install.sh, WebPanel/run.sh, tools/*.py)')"
+    mond "$(t '(futtathatóvá tenné: install.sh, uninstall.sh, WebPanel/run.sh, tools/*.py)' '(it would make these executable: install.sh, uninstall.sh, WebPanel/run.sh, tools/*.py)')"
 fi
 
 fazis "$(t 'Beállítások (.env)' 'Settings (.env)')"
 if [ ! -f "$ROOT/.env" ]; then
     mond "$(t 'nincs .env - készítem a .env.example-ből, friss panel-tokennel' 'no .env - writing one from .env.example, with a fresh panel token')"
     if [ "$CHECK" = 0 ]; then
-        cp "$ROOT/.env.example" "$ROOT/.env" 2>/dev/null || touch "$ROOT/.env"
         TOKEN=$("$PYTHON" -c "import secrets; print(secrets.token_urlsafe(32))")
+        [ -n "$TOKEN" ] || fail "$(t 'nem sikerült panel-tokent készíteni' 'could not make a panel token')"
+        cp "$ROOT/.env.example" "$ROOT/.env" 2>/dev/null || touch "$ROOT/.env"
         printf '\nREBSGO_PANEL_TOKEN=%s\nREBSGO_NET_PANEL_DOOR_PORT=27053\n' "$TOKEN" >> "$ROOT/.env"
         chmod 600 "$ROOT/.env"
         kesz "$(t '.env elkészült, a panel-token friss; csak a tulajdonosa olvashatja' '.env written, with a fresh panel token; readable by its owner only')"
     else
         mond "$(t '(elkészítené)' '(it would write one)')"
+    fi
+# An interrupted earlier run can leave .env with an empty token, and the
+# panel door does not open without one.
+elif [ -z "$(sed -n 's/^REBSGO_PANEL_TOKEN=//p' "$ROOT/.env" | tail -1)" ]; then
+    if [ "$CHECK" = 0 ]; then
+        TOKEN=$("$PYTHON" -c "import secrets; print(secrets.token_urlsafe(32))")
+        [ -n "$TOKEN" ] || fail "$(t 'nem sikerült panel-tokent készíteni' 'could not make a panel token')"
+        printf '\nREBSGO_PANEL_TOKEN=%s\n' "$TOKEN" >> "$ROOT/.env"
+        kesz "$(t '.env már van, de panel-token nélkül - friss tokent írtam bele' '.env is there, but without a panel token - a fresh one is written into it')"
+    else
+        mond "$(t '(a .env-ből hiányzik a panel-token - pótolná)' '(.env has no panel token - it would add one)')"
     fi
 else
     kesz "$(t '.env már van - nem nyúlok hozzá' '.env is already there - left untouched')"
@@ -237,17 +268,28 @@ done
 
 fazis "$(t 'Webpanel — venv a csomagolt wheel-ekből' 'WebPanel — a venv from the bundled wheels')"
 VENV="$ROOT/WebPanel/venv"
-if [ -x "$VENV/bin/python" ]; then
+if [ -x "$VENV/bin/python" ] && "$VENV/bin/python" -c 'import fastapi, uvicorn' >/dev/null 2>&1; then
     kesz "$(t 'a venv már fel van építve' 'the venv is already built')"
 elif [ "$CHECK" = 0 ]; then
+    rm -rf "$VENV"
     DARAB=$(ls "$ROOT"/WebPanel/vendor/wheels/*.whl 2>/dev/null | wc -l)
-    mond "$(t "venv létrehozása, majd $DARAB wheel telepítése (hálózat nélkül)" "creating the venv, then installing $DARAB wheels (with no network)")"
-    "$PYTHON" -m venv "$VENV" || fail "$(t 'a venv létrehozása nem sikerült' 'the venv could not be created')"
-    "$VENV/bin/pip" install --quiet --no-index \
-        --find-links "$ROOT/WebPanel/vendor/wheels" \
-        -r "$ROOT/WebPanel/requirements.txt" \
-        || fail "$(t 'a wheel-telepítés elakadt - hiányos a vendor/wheels?' 'the wheel install failed - is vendor/wheels incomplete?')"
-    kesz "$(t 'a panel venv-je kész' "the panel's venv is ready")"
+    mond "$(t "venv létrehozása, majd a panel csomagjai: elsőként a hozott $DARAB wheel, hálózat nélkül" "creating the venv, then the panel's packages: the $DARAB bundled wheels first, with no network")"
+    "$PYTHON" -m venv "$VENV" \
+        || fail "$(t 'a venv létrehozása nem sikerült (Debianon, Raspberry Pi OS-en: apt install python3-venv)' 'the venv could not be created (on Debian, Raspberry Pi OS: apt install python3-venv)')"
+    # The bundled wheels are built for x86_64 and Python 3.13. Anywhere else,
+    # whatever does not fit comes from PyPI (on Raspberry Pi OS from piwheels).
+    if "$VENV/bin/pip" install --quiet --disable-pip-version-check --no-index \
+            --find-links "$ROOT/WebPanel/vendor/wheels" \
+            -r "$ROOT/WebPanel/requirements.txt" 2>/dev/null; then
+        kesz "$(t 'a panel venv-je kész' "the panel's venv is ready")"
+    else
+        figyel "$(t "a hozott wheel-ek nem mind illenek ehhez a géphez ($GEP) - a többit a PyPI-ról töltöm le" "not all bundled wheels fit this machine ($GEP) - fetching the rest from PyPI")"
+        "$VENV/bin/pip" install --quiet --disable-pip-version-check \
+            --find-links "$ROOT/WebPanel/vendor/wheels" \
+            -r "$ROOT/WebPanel/requirements.txt" \
+            || fail "$(t 'a wheel-telepítés elakadt - van hálózat?' 'the wheel install failed - is there a network?')"
+        kesz "$(t 'a panel venv-je kész' "the panel's venv is ready")"
+    fi
 else
     mond "$(t '(felépítené a WebPanel/vendor/wheels tartalmából)' '(it would build one from WebPanel/vendor/wheels)')"
 fi
@@ -351,4 +393,5 @@ mond "$(t 'webpanel:        http://<ez-a-gép>:27055/   (hálózati eléréshez 
 mond "$(t '                 fájlban PANEL_HOST=0.0.0.0, vagy TLS-proxy mögé)' '                 PANEL_HOST=0.0.0.0 in WebPanel/panel.env, or put it behind a TLS proxy)')"
 mond "$(t 'beállítások:     ' 'settings:        ')$ROOT/.env"
 mond "$(t 'admin fiók:      ' 'admin account:   ')$ADMIN"
+mond "$(t 'eltávolítás:     ' 'uninstall:       ')sh $ROOT/uninstall.sh"
 exit 0

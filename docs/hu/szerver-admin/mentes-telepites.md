@@ -50,14 +50,18 @@ telepítő maga adja vissza.
 
 A telepítő hálózat nélkül dolgozik:
 
-1. kibontja a **hozott Python 3.13-at** a `runtime/python` alá (ha nincs,
-   a rendszer python3-at használja — 3.13 kell a natív gyorsítómodulhoz);
+1. kibontja a **hozott Python 3.13-at** a `runtime/python` alá. Ez
+   x86_64-re készült: más processzoron (például Raspberry Pi-n, ARM-on), vagy
+   ha nincs csomagolt értelmező, a rendszer python3-at használja (3.11 vagy
+   újabb kell; a natív gyorsítómodulhoz x86_64 és 3.13);
 2. létrehozza a mappákat, futtathatóvá teszi a szkripteket (`install.sh`,
    `WebPanel/run.sh`, `tools/*.py`), és ha nincs `.env`, generál egyet friss
    panel-tokennel — ezt csak a tulajdonosa olvashatja;
 3. ellenőrzi, hogy a szerverkód betölt-e, és hogy a **natív gyorsítómodul**
    (`native/lib`, a fában szállítva) aktív-e;
-4. felépíti a panel venv-jét a `WebPanel/vendor/wheels` készletből, és
+4. felépíti a panel venv-jét a `WebPanel/vendor/wheels` készletből (ami
+   ebből nem illik a géphez — ARM-on, vagy nem 3.13-as Pythonnal —, azt a
+   PyPI-ról tölti le, ehhez hálózat kell), és
    megírja a `WebPanel/panel.env`-et: a panel csak a saját gépéről nyílik
    (`PANEL_HOST=127.0.0.1`), a fájlt csak a tulajdonosa olvashatja;
 5. ha még nincs Developer szerepű fiók, bekéri az **első admin fiókot**
@@ -74,7 +78,14 @@ Kapcsolók: `--check` (csak jelent, nem változtat), `--no-systemd`, `--dir`,
 `--here`. A telepítő **újrafuttatható**: meglévő telepítést kiegészít, nem
 ront el; meglévő telepítésre másolva a kód frissül, a `.env`, a világállapot
 (`sqlite/`) és a helyi beállítások megmaradnak. Az admin fiókot csak akkor
-kérdezi, ha még nincs Developer szerepű fiók.
+kérdezi, ha még nincs Developer szerepű fiók. Egy félbeszakadt korábbi
+futás nyomait is rendbe teszi: a gépen nem induló értelmezőt törli, az üres
+panel-tokent pótolja, a félkész venv-et újraépíti.
+
+**Raspberry Pi (ARM):** 64 bites Raspberry Pi OS ajánlott. A telepítő a
+rendszer Pythonját használja (ha a venv nem jön létre:
+`apt install python3-venv`), a panel csomagjait a hálózatról tölti le, a
+szerver pedig a natív gyorsítómodul nélkül, tiszta Pythonon fut.
 
 Indítás utána:
 
@@ -84,6 +95,29 @@ vagy kézzel:
 
     PYTHONPATH=src ./runtime/python/bin/python3 -m rebsgo.main
     ./WebPanel/run.sh
+
+## Eltávolítás
+
+    sudo sh /opt/rebsgo/uninstall.sh
+
+Az `uninstall.sh` a telepítés mappájában van. Leállítja a szolgáltatásokat (a
+`bsgo` kilépéskor elmenti a pilótákat), eltávolítja a `bsgo` és a
+`rebsgo-panel` unitot, és ha a szerver vagy a panel kézzel fut ebből a
+mappából, azt is szabályosan leállítja. Utána megkérdezi, mi maradjon:
+
+1. **az adatok a helyükön** (ajánlott): a program törlődik, a `sqlite/`, a
+   `.env`, a `WebPanel/panel.env` és a `GameData/local` marad. Egy újabb
+   telepítés ugyanebbe a mappába mindent visszakap: a játékosokat, a
+   beállításokat és az admin fiókot;
+2. **mentés, aztán minden megy**: az adatok egy `.tar.gz`-be kerülnek
+   (alapból a telepítés mellé), a mappa törlődik. Visszaállítás egy új
+   telepítésbe, leállított szolgáltatásokkal: `tar xzf <mentés> -C <mappa>`;
+3. **minden megy, mentés nélkül**: csak a `torles` szó begépelése után.
+
+Kérdés nélkül: `--keep-data`, `--backup <fájl>` vagy `--purge`, mellé
+`--yes`; másik telepítéshez `--dir <mappa>`. Más mappára mutató
+szolgáltatáshoz nem nyúl, és a panel mentéseit (`PANEL_BACKUP_DIR`, alapból
+`/opt/bsgo-backups`) sem törli.
 
 ## Ellenőrzött tulajdonságok
 
