@@ -235,7 +235,8 @@ def build_application_bootstrap(data_store: Records | None = None,
                                port=Config.instance().int("REBSGO_NET_PANEL_DOOR_PORT", 27053),
                                console_gateway=console_gateway,
                                sector_book=sector_book,
-                               kapu=kapu)
+                               kapu=kapu,
+                               elengedo=inactive_kicker)
         panel_door.start()
         Services.register_instance(PanelDoor, panel_door)
     else:

@@ -67,7 +67,10 @@ A telepítő hálózat nélkül dolgozik:
    (`native/lib`, a fában szállítva) aktív-e;
 4. felépíti a panel venv-jét a `WebPanel/vendor/wheels` készletből (ami
    ebből nem illik a géphez — más processzoron, vagy nem 3.13-as
-   Pythonnal —, azt a PyPI-ról tölti le, ehhez hálózat kell), és
+   Pythonnal —, azt a PyPI-ról tölti le, ehhez hálózat kell; amihez ott
+   sincs kész csomag erre a gépre, azt helyben fordítja, és ha ehhez
+   hiányzik a `python3-dev` vagy a `gcc`, rootként apt-get-tel felteszi;
+   a pip naplója: `logs/panel-pip.log`), és
    megírja a `WebPanel/panel.env`-et: a panel csak a saját gépéről nyílik
    (`PANEL_HOST=127.0.0.1`), a fájlt csak a tulajdonosa olvashatja;
 5. ha még nincs Developer szerepű fiók, bekéri az **első admin fiókot**

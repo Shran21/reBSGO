@@ -24,9 +24,17 @@ def _owner_of(table: str, values: dict):
         return None
 
 
-def _locked(table: str, values: dict) -> bool:
+def _shown_locked(table: str, values: dict) -> bool:
     owner = _owner_of(table, values)
     return owner is not None and owner in bridge.online_ids()
+
+
+def _locked(table: str, values: dict) -> str:
+    # Before a write: "online", "released" (the server has just let go of the
+    # pilot and written their rows anew, so a row id read earlier may now be
+    # another row), or "".
+    owner = _owner_of(table, values)
+    return "" if owner is None else bridge.release(owner)
 
 
 def _cell(value) -> dict:
@@ -180,7 +188,7 @@ async def db_insert(request: Request, table: str):
     values = {name: value
               for name, value in _form_values(form, columns).items()
               if value is not None}
-    if _locked(table, values):
+    if _locked(table, values) == "online":
         return RedirectResponse(f"/db/{table}/new?error=db.online_locked", status_code=303)
     try:
         rid = database.insert_row(table, values)
@@ -205,7 +213,7 @@ async def db_row(request: Request, table: str, rid: int,
                 table=table, rid=rid,
                 fields=_fields(database.columns(table), found),
                 may_edit=request.state.session.wears(ServerRoles.Developer),
-                locked=_locked(table, found),
+                locked=_shown_locked(table, found),
                 notice=notice, error=error, detail=detail)
 
 
@@ -223,9 +231,12 @@ async def db_save(request: Request, table: str, rid: int):
         return RedirectResponse("/db", status_code=303)
     if found is None:
         return RedirectResponse(f"/db/{table}?error=db.gone", status_code=303)
-    if _locked(table, found):
+    lock = _locked(table, found)
+    if lock == "online":
         return RedirectResponse(f"/db/{table}/{rid}?error=db.online_locked",
                                 status_code=303)
+    if lock == "released":
+        return RedirectResponse(f"/db/{table}?error=db.released", status_code=303)
     values = _form_values(form, database.columns(table))
     try:
         old = database.update_row(table, rid, values)
@@ -252,9 +263,12 @@ async def db_delete(request: Request, table: str, rid: int):
         return RedirectResponse("/db", status_code=303)
     if found is None:
         return RedirectResponse(f"/db/{table}?error=db.gone", status_code=303)
-    if _locked(table, found):
+    lock = _locked(table, found)
+    if lock == "online":
         return RedirectResponse(f"/db/{table}/{rid}?error=db.online_locked",
                                 status_code=303)
+    if lock == "released":
+        return RedirectResponse(f"/db/{table}?error=db.released", status_code=303)
     old = database.delete_row(table, rid)
     record(session.name, "db.delete", target=f"{table} rid={rid}",
            outcome="; ".join(f"{k}={v!r}" for k, v in (old or {}).items())[:300])

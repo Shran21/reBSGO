@@ -48,6 +48,20 @@ class Bridge:
             return set()
         return {pilot.get("id") for pilot in status.get("online", [])}
 
+    def release(self, pilot_id: int) -> str:
+        # Asked before the panel writes a pilot's rows. A pilot who has left is
+        # held in the server's memory for a while and written back from there
+        # when let go - or handed that copy back if they return - so an edit
+        # made meanwhile would be lost; the server lets go of them at once.
+        # "online": in the game, the rows cannot be written now; "released":
+        # just let go, their rows were written once more; "" otherwise.
+        answer = self._request("/release", {"pilot": int(pilot_id)})
+        if answer is None:
+            return "online" if pilot_id in self.online_ids() else ""
+        if answer.get("online"):
+            return "online"
+        return "released" if answer.get("released") else ""
+
     def save_now(self):
         return self._request("/save", {})
 

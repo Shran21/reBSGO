@@ -50,6 +50,11 @@ Két visszatérő korlát:
   törlése, adatbázis-sorai). Amíg valaki játszik, az adatait a szerver tartja
   a memóriában, és két percenként visszaírja — a panelből írt érték elveszne.
   A panel ilyenkor jelzi, hogy a pilótának előbb ki kell lépnie a játékból.
+  A kilépett pilótát a szerver még egy ideig (alapból 6 percig) a
+  memóriájában tartja; írás előtt a panel ezt elengedteti vele, így a
+  módosítás a visszatérés után is megmarad. Az adatbázis-szerkesztőben ilyenkor
+  az első mentés vagy törlés nem hajtódik végre (a pilóta sorai újraíródtak):
+  a sort újra kell nyitni, és újra kell próbálni.
 - **Minden írás CSRF-védett**, és minden írás auditba kerül.
 
 ## Kényelmi funkciók

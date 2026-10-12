@@ -19,13 +19,19 @@ The two talk over two channels:
 
 The door's endpoints: `/status`, `/save`, `/console`, `/console/commands`,
 `/log`, `/sectors`, `/sector-event`, `/sector-op`, `/sector-restart`,
-`/policy-reload`, `/maintenance`, `/rankings-recalc`.
+`/policy-reload`, `/maintenance`, `/rankings-recalc`, `/release`.
 
 **Why the panel does not write everything straight into the database:**
 while a pilot is in the game, their data lives in the server's memory and
 their row is overwritten every two minutes. That is why all live state goes
 through the door, and why the panel refuses to edit the data of anyone who
-is in the game.
+is in the game. After leaving, a pilot is still held in the server's memory
+for a while (`REBSGO_IDLE_MINUTES_BEFORE_KICK`, 6 minutes by default): if
+they return by then they get that copy back, if not, it is written back when
+the time is up. So before a write to a pilot's game data (roles,
+resources, erasing the account, a database row), the panel has the server
+let go of them through `/release` — the server saves them once more and
+drops them from memory — and only then writes.
 
 ## Files
 

@@ -23,6 +23,7 @@ UTVONAL_SZEKTOR_UJRA = "/sector-restart"
 UTVONAL_SZABALYZAT = "/policy-reload"
 UTVONAL_KARBANTARTAS = "/maintenance"
 UTVONAL_RANGLISTA = "/rankings-recalc"
+UTVONAL_ELENGED = "/release"
 KULCS_FEJLEC = "X-Panel-Key"
 
 _KERES_HATAR_BAJT = 16384
@@ -38,8 +39,9 @@ def _uptime_text(masodperc: float) -> str:
 class PanelDoor:
     def __init__(self, kulcs: str, pilot_roster, data_store, host: str = "127.0.0.1",
                  port: int = 27053, console_gateway=None, sector_book=None,
-                 kapu=None):
+                 kapu=None, elengedo=None):
         self._kulcs = kulcs
+        self._elengedo = elengedo
         self._pilot_roster = pilot_roster
         self._data_store = data_store
         self._console_gateway = console_gateway
@@ -116,6 +118,8 @@ class PanelDoor:
                     self._json(*ajto.karbantartas_beallit(torzs))
                 elif self.path == UTVONAL_RANGLISTA:
                     self._json(*ajto.ranglista_ujraszamol())
+                elif self.path == UTVONAL_ELENGED:
+                    self._json(*ajto.elenged(torzs))
                 else:
                     self._json(HTTPStatus.NOT_FOUND, {"error": "no such path"})
 
@@ -194,6 +198,23 @@ class PanelDoor:
         except Exception as baj:
             log.exception("panel console request fell over")
             return HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(baj)}
+
+    def elenged(self, torzs: bytes) -> tuple:
+        if self._elengedo is None:
+            return HTTPStatus.NOT_IMPLEMENTED, {"error": "no idle sweep"}
+        try:
+            keres = json.loads(torzs.decode("utf-8") or "{}")
+            pilot_id = int(keres["pilot"])
+        except (ValueError, KeyError, TypeError, UnicodeDecodeError):
+            return HTTPStatus.BAD_REQUEST, {"error": "want json with pilot"}
+        try:
+            mi_lett = self._elengedo.release(pilot_id)
+        except Exception as baj:
+            log.exception("letting go of a pilot fell over")
+            return HTTPStatus.INTERNAL_SERVER_ERROR, {"error": str(baj)}
+        if mi_lett == "released":
+            log.info("panel door let go of pilot %s, held in memory since they left", pilot_id)
+        return HTTPStatus.OK, {"online": mi_lett == "online", "released": mi_lett == "released"}
 
     def konzol_nevek(self) -> tuple:
         if self._console_gateway is None:

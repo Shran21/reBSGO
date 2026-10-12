@@ -51,7 +51,12 @@ Two recurring limits:
   resources, deleting the account, its database rows). While somebody is
   playing, the server holds their data in memory and writes it back every
   two minutes — a value written from the panel would be lost. The panel
-  states this: the pilot has to leave the game first.
+  states this: the pilot has to leave the game first. A pilot who has left
+  is still held in the server's memory for a while (6 minutes by default);
+  before writing, the panel has the server let go of them, so the change
+  stays after they return. In the database editor the first save or delete
+  does not go through then (the pilot's rows were written anew): open the row
+  again and try once more.
 - **Every write is CSRF-protected**, and every write goes into the audit.
 
 ## Conveniences

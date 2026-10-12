@@ -163,7 +163,7 @@ async def save_roles(request: Request, pilot_id: int):
         return RedirectResponse(f"/users/{pilot_id}?error=csrf.failed", status_code=303)
     if not session.wears(ServerRoles.Developer):
         return RedirectResponse(f"/users/{pilot_id}?error=user.roles.denied", status_code=303)
-    if pilot_id in bridge.online_ids():
+    if bridge.release(pilot_id) == "online":
         return RedirectResponse(f"/users/{pilot_id}?error=user.roles.online_locked",
                                 status_code=303)
     bits = 0
@@ -237,11 +237,11 @@ async def erase_account(request: Request, pilot_id: int):
         return RedirectResponse(f"/users/{pilot_id}?error=csrf.failed", status_code=303)
     if not session.wears(ServerRoles.Developer):
         return RedirectResponse(f"/users/{pilot_id}?error=account.denied", status_code=303)
-    if pilot_id in bridge.online_ids():
-        return RedirectResponse(f"/users/{pilot_id}?error=account.online",
-                                status_code=303)
     if pilot_id == session.pilot_id:
         return RedirectResponse(f"/users/{pilot_id}?error=account.self",
+                                status_code=303)
+    if bridge.release(pilot_id) == "online":
+        return RedirectResponse(f"/users/{pilot_id}?error=account.online",
                                 status_code=303)
     removed = database.erase_pilot(pilot_id)
     record(session.name, "account.erase", target=f"pilot={pilot_id}",
@@ -280,7 +280,7 @@ async def save_resources(request: Request, pilot_id: int):
     if not session.wears_any(ServerRoles.Developer, ServerRoles.Edit):
         return RedirectResponse(f"/users/{pilot_id}?error=user.resources.denied",
                                 status_code=303)
-    if pilot_id in bridge.online_ids():
+    if bridge.release(pilot_id) == "online":
         return RedirectResponse(f"/users/{pilot_id}?error=user.resources.online_locked",
                                 status_code=303)
     for guid, key in RESOURCE_GUIDS:

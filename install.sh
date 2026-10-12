@@ -300,10 +300,45 @@ elif [ "$CHECK" = 0 ]; then
         kesz "$(t 'a panel venv-je kész' "the panel's venv is ready")"
     else
         figyel "$(t "a hozott wheel-ek nem mind illenek ehhez a géphez ($GEP) - a többit a PyPI-ról töltöm le" "not all bundled wheels fit this machine ($GEP) - fetching the rest from PyPI")"
-        "$VENV/bin/pip" install --quiet --disable-pip-version-check \
-            --find-links "$ROOT/WebPanel/vendor/wheels" \
-            -r "$ROOT/WebPanel/requirements.txt" \
-            || fail "$(t 'a wheel-telepítés elakadt - van hálózat?' 'the wheel install failed - is there a network?')"
+        mond "$(t 'ami fordítást kíván, az lassabb gépen percekig is eltarthat' 'whatever needs compiling can take minutes on a slower machine')"
+        # What PyPI has no wheel for on this machine (psutil on 32-bit ARM) is
+        # compiled here. pip's long output goes to a log; only its tail is shown.
+        NAPLO="$ROOT/logs/panel-pip.log"
+        : > "$NAPLO"
+        pip_pypi() {
+            "$VENV/bin/pip" install --disable-pip-version-check \
+                --find-links "$ROOT/WebPanel/vendor/wheels" \
+                -r "$ROOT/WebPanel/requirements.txt" >>"$NAPLO" 2>&1
+        }
+        pip_hiba() {
+            tail -n 15 "$NAPLO" >&2
+            fail "$(t "$1 - a teljes napló: $NAPLO" "$2 - the full log: $NAPLO")"
+        }
+        if ! pip_pypi; then
+            # Compiling needs the Python headers and the C compiler Python was built with.
+            HIANY=$("$PYTHON" -c 'import os, shutil, sysconfig
+h = []
+if not os.path.isfile(os.path.join(sysconfig.get_paths()["include"], "Python.h")): h.append("python3-dev")
+if not shutil.which((os.environ.get("CC") or sysconfig.get_config_var("CC") or "cc").split()[0]): h.append("gcc")
+print(" ".join(h))')
+            # Only a failed build is the tools' fault; anything else (the network) is shown as it is.
+            [ -n "$HIANY" ] && grep -qE 'Failed building wheel|Failed to build|Could not build wheels' "$NAPLO" \
+                || pip_hiba 'a panel csomagjai nem települtek (van hálózat?)' "the panel's packages did not install (is there a network?)"
+            CSOMAG=$(sed -n 's/.*Failed building wheel for \([A-Za-z0-9_.-]*\).*/\1/p' "$NAPLO" | sort -u | paste -sd ' ' -)
+            figyel "$(t "${CSOMAG:-egy csomag}: erre a gépre nincs kész wheel, helyben kell fordítani - ehhez hiányzik: $HIANY" "${CSOMAG:-a package}: there is no ready wheel for this machine, it has to be compiled here - missing for that: $HIANY")"
+            [ "$(id -u)" = 0 ] && command -v apt-get >/dev/null 2>&1 \
+                || fail "$(t "telepítsd rootként (Debianon: apt install $HIANY)" "install it as root (on Debian: apt install $HIANY)")"
+            mond "$(t "telepítés: apt-get install $HIANY" "installing: apt-get install $HIANY")"
+            apt_tesz() {
+                DEBIAN_FRONTEND=noninteractive apt-get install -y -q -o DPkg::Lock::Timeout=300 "$@" >>"$NAPLO" 2>&1
+            }
+            # shellcheck disable=SC2086
+            apt_tesz $HIANY || { apt-get update -q >>"$NAPLO" 2>&1 && apt_tesz $HIANY; } \
+                || pip_hiba "az apt-get install $HIANY nem sikerült" "apt-get install $HIANY failed"
+            kesz "$(t "felkerült: $HIANY" "installed: $HIANY")"
+            mond "$(t 'fordítás és telepítés' 'compiling and installing')"
+            pip_pypi || pip_hiba 'a panel csomagjai nem települtek' "the panel's packages did not install"
+        fi
         kesz "$(t 'a panel venv-je kész' "the panel's venv is ready")"
     fi
 else

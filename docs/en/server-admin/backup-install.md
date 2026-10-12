@@ -71,7 +71,10 @@ The installer works without a network:
 4. it builds the panel's venv from the `WebPanel/vendor/wheels` set
    (whatever there does not fit the machine — on another processor, or
    with a Python other than 3.13 — comes from PyPI, which needs a
-   network), and
+   network; whatever PyPI has no ready package for on this machine is
+   compiled here, and if `python3-dev` or `gcc` is missing for that, it
+   installs them with apt-get as root; pip's log: `logs/panel-pip.log`),
+   and
    writes `WebPanel/panel.env`: the panel opens on its own machine only
    (`PANEL_HOST=127.0.0.1`), and only the file's owner can read it;
 5. if no account has the Developer role yet, it asks for the **first admin

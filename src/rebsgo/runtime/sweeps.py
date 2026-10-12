@@ -100,6 +100,7 @@ class IdleSweep:
         self._data_store = data_store
         self._minutes_offline_before_kick = minutes_offline_before_kick
         self._party_registry = csapat_nyilvantarto
+        self._lock = threading.Lock()
 
     def run(self) -> None:
         users_to_kick = []
@@ -119,10 +120,32 @@ class IdleSweep:
                 users_to_kick.append(user)
 
         for user in users_to_kick:
+            self._let_go(user)
+
+    def release(self, user_id: int) -> str:
+        # A pilot who has left is held here until the sweep lets go of them,
+        # and is written back from memory then - or handed that copy back if
+        # they return - so a row written meanwhile by the panel would be lost.
+        # The panel has them let go at once, before it writes.
+        user = self._pilot_roster.by_id(user_id)
+        if user is None:
+            return "not_held"
+        if user.connection() is not None:
+            return "online"
+        if self._let_go(user):
+            return "released"
+        return "online" if user.connection() is not None else "not_held"
+
+    def _let_go(self, user) -> bool:
+        with self._lock:
+            if (user.connection() is not None
+                    or self._pilot_roster.by_id(user.pilot_of().user_id_of()) is not user):
+                return False
             if self._party_registry is not None:
                 self._party_registry.remove_user_and_notify(user)
             self._data_store.store_pilot(user.pilot_of())
             self._pilot_roster.remove(user)
+            return True
 
 
 class TallySweep:

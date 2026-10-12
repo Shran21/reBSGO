@@ -18,12 +18,18 @@ A kettő két csatornán beszél:
 
 Az ajtó végpontjai: `/status`, `/save`, `/console`, `/console/commands`,
 `/log`, `/sectors`, `/sector-event`, `/sector-op`, `/sector-restart`,
-`/policy-reload`, `/maintenance`, `/rankings-recalc`.
+`/policy-reload`, `/maintenance`, `/rankings-recalc`, `/release`.
 
 **Miért nem ír a panel közvetlenül mindent az adatbázisba:** amíg egy pilóta
 bent van, az adatai a szerver memóriájában élnek, és két percenként
 felülíródik a soruk. Ezért megy minden élő állapot az ajtón át, és ezért
-tiltja a panel a bent lévők adatainak szerkesztését.
+tiltja a panel a bent lévők adatainak szerkesztését. Kilépés után a szerver
+még egy ideig (`REBSGO_IDLE_MINUTES_BEFORE_KICK`, alapból 6 perc) a
+memóriájában tartja a pilótát: ha addig visszajön, onnan kapja vissza magát,
+ha nem, az idő leteltével onnan íródik vissza. Ezért a panel a pilóta
+játékadatait érintő írás (szerep, nyersanyag, fióktörlés, adatbázis-sor) előtt
+a `/release` végponttal elengedteti a szerverrel — az ekkor még egyszer
+elmenti, és kiveszi a memóriájából —, és csak utána ír.
 
 ## Fájlok
 
