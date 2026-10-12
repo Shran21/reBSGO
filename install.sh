@@ -5,12 +5,14 @@ set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 CHECK=0
 SYSTEMD=1
+RESTART=1
 INPLACE=0
 TARGET=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1 ;;
         --no-systemd) SYSTEMD=0 ;;
+        --no-restart) RESTART=0 ;;
         --here) INPLACE=1 ;;
         --dir) shift; TARGET=${1:-}; [ -n "$TARGET" ] || { echo "--dir: missing path"; exit 2; } ;;
         --dir=*) TARGET=${1#--dir=} ;;
@@ -129,6 +131,7 @@ else
     kesz "$(t 'átmásolva; a telepítés az új helyről folytatódik' 'copied; the installation carries on from the new place')"
     TOVABB="--here"
     [ "$SYSTEMD" = 0 ] && TOVABB="$TOVABB --no-systemd"
+    [ "$RESTART" = 0 ] && TOVABB="$TOVABB --no-restart"
     # shellcheck disable=SC2086
     exec sh "$TARGET/install.sh" $TOVABB
 fi
@@ -227,6 +230,19 @@ elif [ -z "$(sed -n 's/^REBSGO_PANEL_TOKEN=//p' "$ROOT/.env" | tail -1)" ]; then
     fi
 else
     kesz "$(t '.env már van - nem nyúlok hozzá' '.env is already there - left untouched')"
+fi
+# At the server's own default every sector simulates at full speed even with
+# nobody in it, and a small machine cannot keep up with that. A setting the
+# operator made, either way, stays as it is.
+if grep -qE '^(REBSGO_SECTOR_GATING_MODE|REBSGO_SECTOR_EMPTY_GATING)=.' "$ROOT/.env" 2>/dev/null; then
+    kesz "$(t 'szektor-altatás: a .env saját beállítása marad' 'sector gating: the setting in .env stays')"
+elif [ "$CHECK" = 1 ]; then
+    mond "$(t '(bekapcsolná a szektor-altatást: REBSGO_SECTOR_GATING_MODE=idle)' '(it would switch sector gating on: REBSGO_SECTOR_GATING_MODE=idle)')"
+else
+    printf '\n# %s\nREBSGO_SECTOR_GATING_MODE=idle\n' \
+        "empty sectors sleep, a player arriving wakes them; off = every sector simulates all the time" >> "$ROOT/.env"
+    kesz "$(t 'szektor-altatás bekapcsolva: az üres szektorok alszanak (REBSGO_SECTOR_GATING_MODE=idle)' 'sector gating switched on: empty sectors sleep (REBSGO_SECTOR_GATING_MODE=idle)')"
+    mond "$(t 'kikapcsolás: REBSGO_SECTOR_GATING_MODE=off a .env-ben, majd a bsgo újraindítása' 'to switch it off: REBSGO_SECTOR_GATING_MODE=off in .env, then restart bsgo')"
 fi
 
 fazis "$(t 'Gyorspróba — betölt-e a szerverkód, él-e a natív gyorsítás' 'Quick check — does the server code load, is the native acceleration live')"
@@ -368,7 +384,15 @@ else
     for SZOLGALTATAS in bsgo rebsgo-panel; do
         [ "$(systemctl is-active "$SZOLGALTATAS")" = active ] && MAR_FUTOTT="$MAR_FUTOTT $SZOLGALTATAS"
     done
-    mond "$(t 'indítás...' 'starting...')"
+    # An update only takes over once the services restart; stopping bsgo
+    # signs the players out, and on the way out it saves the pilots.
+    if [ -n "$MAR_FUTOTT" ] && [ "$RESTART" = 1 ]; then
+        mond "$(t "újraindítás, hogy a frissítés életbe lépjen:$MAR_FUTOTT (a bent lévők kilépnek, a pilóták mentődnek)..." "restarting so the update takes over:$MAR_FUTOTT (players inside are signed out, the pilots are saved)...")"
+        # shellcheck disable=SC2086
+        systemctl restart $MAR_FUTOTT
+    else
+        mond "$(t 'indítás...' 'starting...')"
+    fi
     systemctl start bsgo rebsgo-panel
     sleep 3
     for SZOLGALTATAS in bsgo rebsgo-panel; do
@@ -378,8 +402,8 @@ else
             figyel "$(t "$SZOLGALTATAS nem indult el - napló: journalctl -u $SZOLGALTATAS -e" "$SZOLGALTATAS did not start - log: journalctl -u $SZOLGALTATAS -e")"
         fi
     done
-    if [ -n "$MAR_FUTOTT" ]; then
-        figyel "$(t "már előtte is futott:$MAR_FUTOTT - a frissített kód újraindítás után él" "already running before:$MAR_FUTOTT - the updated code takes over after a restart")"
+    if [ -n "$MAR_FUTOTT" ] && [ "$RESTART" = 0 ]; then
+        figyel "$(t "már előtte is futott:$MAR_FUTOTT - kérésre nem indítottam újra (--no-restart); a frissítés az újraindítás után él" "already running before:$MAR_FUTOTT - not restarted on request (--no-restart); the update takes over after a restart")"
         mond "systemctl restart$MAR_FUTOTT"
         mond "$(t '(a bsgo leállása kilépteti a játékosokat, a pilótákat elmenti)' '(stopping bsgo signs the players out, and saves the pilots)')"
     fi

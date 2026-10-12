@@ -7,9 +7,10 @@
 #   wget -qO- https://raw.githubusercontent.com/Shran21/reBSGO/main/install-basic.sh | sudo sh
 #
 # Switches, after `sh -s --`: --dir <directory> (default /opt/rebsgo, or
-# ~/rebsgo without root), --ref <branch or tag> (default main), --no-systemd.
-# Run again, it updates: the code is replaced, while .env, sqlite/ and the
-# local settings stay. A fork sets REBSGO_REPO=<owner>/<repo>, a mirror
+# ~/rebsgo without root), --ref <branch or tag> (default main), --no-systemd,
+# --no-restart. Run again, it updates: the code is replaced, while .env,
+# sqlite/ and the local settings stay, and running services are restarted
+# unless --no-restart says otherwise. A fork sets REBSGO_REPO=<owner>/<repo>, a mirror
 # REBSGO_URL=<the .tar.gz to fetch>.
 #
 # Nothing runs before the very last line calls fo: piped into sh, a download
@@ -45,8 +46,9 @@ fo() {
             --ref) [ $# -gt 1 ] || fail "--ref: $(t 'hiányzik az ág vagy a tag' 'missing branch or tag')"
                    shift; REF=$1 ;;
             --ref=*) REF=${1#--ref=} ;;
-            --no-systemd) TOVABB="--no-systemd" ;;
-            -h|--help) printf '%s\n' "curl -fsSL https://raw.githubusercontent.com/$TAROLO/main/install-basic.sh | sudo sh -s -- [--dir <dir>] [--ref <branch|tag>] [--no-systemd]"
+            --no-systemd) TOVABB="$TOVABB --no-systemd" ;;
+            --no-restart) TOVABB="$TOVABB --no-restart" ;;
+            -h|--help) printf '%s\n' "curl -fsSL https://raw.githubusercontent.com/$TAROLO/main/install-basic.sh | sudo sh -s -- [--dir <dir>] [--ref <branch|tag>] [--no-systemd] [--no-restart]"
                        exit 0 ;;
             *) fail "$(t 'ismeretlen kapcsoló:' 'unknown flag:') $1" ;;
         esac

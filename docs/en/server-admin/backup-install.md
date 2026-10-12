@@ -24,13 +24,16 @@ account. Switches after `sh -s --`:
     … | sudo sh -s -- --dir /srv/rebsgo     → target directory, no question
     … | sudo sh -s -- --ref <branch or tag>  → other than the main branch
     … | sudo sh -s -- --no-systemd           → without the services
+    … | sudo sh -s -- --no-restart           → no restart on an update
 
 **Updating:** the same command, onto the same target directory. The code is
 replaced, while `.env`, the world state (`sqlite/`) and the local settings
 stay, and no admin account is asked for again. If the services were already
-running, the installer prints the restart command at the end (`systemctl
-restart bsgo rebsgo-panel`); it does not run it on its own, because stopping
-bsgo signs the players out.
+running, the installer restarts them at the end so the update takes over: on
+the way out bsgo saves the pilots, and the players inside are signed out.
+With `--no-restart` that is left out and the installer only prints the restart
+command (`systemctl restart bsgo rebsgo-panel`), for a live server you would
+rather restart later, say.
 
 Without a terminal, automated for instance, it asks nothing: the target
 directory is the default or `--dir`, and the admin account has to be made
@@ -60,7 +63,9 @@ The installer works without a network:
    newer is needed; the native accelerator module needs x86_64 and 3.13);
 2. it creates the folders, makes the scripts executable (`install.sh`,
    `WebPanel/run.sh`, `tools/*.py`), and if there is no `.env`, it
-   generates one with a fresh panel token — readable by its owner only;
+   generates one with a fresh panel token — readable by its owner only —,
+   and switches sector gating on in it (`REBSGO_SECTOR_GATING_MODE=idle`,
+   see below) unless `.env` already says something about it;
 3. it checks that the server code loads and that the **native accelerator
    module** (`native/lib`, shipped in the tree) is active;
 4. it builds the panel's venv from the `WebPanel/vendor/wheels` set
@@ -79,8 +84,8 @@ The installer works without a network:
 The players' launcher is `launcher/rebsgo-launcher.exe` — that is what to
 hand them; they enter the door's address in the launcher's settings.
 
-Switches: `--check` (report only, change nothing), `--no-systemd`, `--dir`,
-`--here`. The installer is **re-runnable**: it completes an existing
+Switches: `--check` (report only, change nothing), `--no-systemd`,
+`--no-restart`, `--dir`, `--here`. The installer is **re-runnable**: it completes an existing
 installation and breaks nothing; copied onto an existing installation it
 refreshes the code and keeps `.env`, the world state (`sqlite/`) and the
 local settings. It only asks for an admin account while no account has the
@@ -92,6 +97,21 @@ panel token, and rebuilds a half-built venv.
 installer uses the system's Python (if the venv cannot be made:
 `apt install python3-venv`), fetches the panel's packages from the network,
 and the server runs on plain Python, without the native accelerator module.
+
+**Sector gating.** On its own the server simulates every sector at full
+speed, the empty ones too, and a smaller machine cannot keep up with that. So
+the installer writes `REBSGO_SECTOR_GATING_MODE=idle` into `.env`: an empty
+sector does not simulate, after 2 minutes its timers slow down, after 10
+minutes it goes into deep sleep, and a player arriving wakes it within a
+second.
+Measured on an x86 machine, the server's load with no players drops from 57%
+to about 20% this way, and to 2% after 10 minutes (100% = one CPU core). What
+goes on in empty sectors meanwhile (NPCs moving, respawns, timed events) slows
+down or pauses. The other modes: `empty` (only the simulation is skipped),
+`adaptive` (deep sleep only under heavy machine load), `off` (everything
+simulates all the time). Change it in `.env`, then `systemctl restart bsgo`.
+The installer leaves a setting that is already there alone, and on an update
+it only writes the line when there is none.
 
 Starting afterwards:
 

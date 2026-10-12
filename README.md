@@ -12,7 +12,7 @@ Linuxon, rootként, egyetlen paranccsal:
 
     curl -fsSL https://raw.githubusercontent.com/Shran21/reBSGO/main/install-basic.sh | sudo sh
 
-Letölti a repót és elindítja a telepítőt. Csak a célmappát (Enter = `/opt/rebsgo`) és az első admin fiókot kérdezi, a többit magától elvégzi. Ahol nincs `curl`: `wget -qO- … | sudo sh`. Ugyanez a parancs frissít is: a kód lecserélődik, a `.env`, az `sqlite/` és a helyi beállítások maradnak. Raspberry Pi-n (ARM) is működik: ott a rendszer Pythonját használja, a panel csomagjait a hálózatról tölti le, a szerver pedig a natív gyorsítómodul nélkül fut.
+Letölti a repót és elindítja a telepítőt. Csak a célmappát (Enter = `/opt/rebsgo`) és az első admin fiókot kérdezi, a többit magától elvégzi. Ahol nincs `curl`: `wget -qO- … | sudo sh`. Ugyanez a parancs frissít is: a kód lecserélődik, a `.env`, az `sqlite/` és a helyi beállítások maradnak, a futó szolgáltatásokat pedig a végén újraindítja. Raspberry Pi-n (ARM) is működik: ott a rendszer Pythonját használja, a panel csomagjait a hálózatról tölti le, a szerver pedig a natív gyorsítómodul nélkül fut.
 
 ## Telepítés letöltött vagy klónozott fából
 
@@ -99,7 +99,7 @@ On Linux, as root, with a single command:
 
     curl -fsSL https://raw.githubusercontent.com/Shran21/reBSGO/main/install-basic.sh | sudo sh
 
-It downloads the repository and starts the installer. The only questions are the target directory (Enter = `/opt/rebsgo`) and the first admin account; it does the rest on its own. Where there is no `curl`: `wget -qO- … | sudo sh`. The same command updates as well: the code is replaced, while `.env`, `sqlite/` and the local settings stay. It works on a Raspberry Pi (ARM) too: there it uses the system's Python, fetches the panel's packages from the network, and the server runs without the native accelerator module.
+It downloads the repository and starts the installer. The only questions are the target directory (Enter = `/opt/rebsgo`) and the first admin account; it does the rest on its own. Where there is no `curl`: `wget -qO- … | sudo sh`. The same command updates as well: the code is replaced, while `.env`, `sqlite/` and the local settings stay, and the running services are restarted at the end. It works on a Raspberry Pi (ARM) too: there it uses the system's Python, fetches the panel's packages from the network, and the server runs without the native accelerator module.
 
 ### Installing from a downloaded or cloned tree
 
