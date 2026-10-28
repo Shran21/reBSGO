@@ -907,3 +907,43 @@ th.selcell, td.selcell { width: 1%; padding-right: 0; }
 .logtools input[type="search"] { flex: 1 1 180px; min-width: 140px; }
 .spanpills { display: inline-flex; gap: 4px; }
 .sealed { border-color: rgba(251, 191, 36, .35); }
+
+/* monitor: the game server's threads */
+.thrcard > summary { list-style: none; cursor: pointer; }
+.thrcard > summary::-webkit-details-marker { display: none; }
+.thr-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.thr-head::before { content: "▸"; color: var(--dim); font-size: 12px; transition: transform .12s; }
+.thrcard[open] > .thr-head::before { transform: rotate(90deg); }
+.thr-sum { font-size: 12px; margin-left: auto; }
+.thr-tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 14px 0 10px; }
+.thr-tools input[type="search"] {
+  flex: 1 1 260px; max-width: 420px; font: inherit; color: var(--text); background: var(--bg2);
+  border: 1px solid var(--line2); border-radius: var(--r-ctl); padding: 8px 11px;
+}
+.thr-tools input[type="search"]:focus { outline: none; border-color: var(--acc); }
+.thr-groups { display: flex; flex-direction: column; gap: 8px; }
+.thr-group { border: 1px solid var(--line); border-radius: 12px; background: var(--bg2); }
+.thr-ghead {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px; cursor: pointer; list-style: none; font-size: 13px;
+}
+.thr-ghead::-webkit-details-marker { display: none; }
+.thr-ghead b::before { content: "▸ "; color: var(--dim); }
+.thr-group[open] > .thr-ghead b::before { content: "▾ "; }
+.thr-ghead span { font-size: 12px; }
+.thr-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 300px) 120px;
+  gap: 14px; align-items: center; padding: 8px 14px; border-top: 1px solid var(--line);
+}
+.thr-who { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.thr-who b { font-size: 13px; font-weight: 600; }
+.thr-who span { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thr-load { display: flex; align-items: center; gap: 10px; }
+.thr-load .mbar { flex: 1; }
+.thr-pct { min-width: 56px; text-align: right; font-size: 12.5px; }
+.thr-time { font-size: 11.5px; text-align: right; }
+@media (max-width: 700px) {
+  .thr-row { grid-template-columns: 1fr; gap: 6px; }
+  .thr-time { text-align: left; }
+  .thr-sum { margin-left: 0; flex-basis: 100%; }
+}

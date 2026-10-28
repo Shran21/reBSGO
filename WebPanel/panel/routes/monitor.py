@@ -6,6 +6,7 @@ import asyncio
 import collections
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -136,6 +137,93 @@ def _process_slice(unit: str) -> dict:
         return {"alive": False}
 
 
+# ---- threads of the game server: who they are, and what each one costs ----------
+# The load of a thread is its CPU time between two looks, so each look keeps the
+# last one. A single thread can use one core at most: 100% is a saturated thread,
+# and a sector runs on one thread - its ceiling, whatever the machine has left.
+
+# "crew-26 sector [24]"; the system cuts it to "crew-26 sector" or "crew-6 sector ["
+_SECTOR_THREAD = re.compile(r"^crew-\d+ sector(?: \[(-?\d+)?)?")
+_threads_seen: dict = {"pid": None, "at": 0.0, "cpu": {}, "result": None}
+_threads_lock = threading.Lock()
+_THREADS_FRESH_SECONDS = 1.0
+
+
+def _thread_kind(name: str) -> tuple:
+    sector = _SECTOR_THREAD.match(name)
+    if sector:
+        return "sector", int(sector.group(1)) if sector.group(1) is not None else None
+    if name.startswith("crew-"):
+        return "worker", None
+    if name.startswith("bejovo"):
+        return "conn", None
+    if name.startswith("QueuedOutbox") or "outbox" in name.lower() or "sender" in name.lower():
+        return "send", None
+    if name.startswith("recurring-"):
+        return "task", None
+    return "other", None
+
+
+def _thread_names(pid: int) -> dict:
+    told = bridge.threads()
+    if not told or told.get("pid") != pid:
+        return {}
+    return {int(row["tid"]): str(row["name"]) for row in told.get("threads", [])
+            if row.get("tid") is not None}
+
+
+def _os_thread_name(pid: int, tid: int) -> str:
+    try:
+        with open(f"/proc/{pid}/task/{tid}/comm", encoding="utf-8", errors="replace") as handle:
+            return handle.read().strip()
+    except OSError:
+        return ""
+
+
+def _threads_slice(pid) -> dict | None:
+    from panel.sectors import sector_name
+    if not pid:
+        return None
+    for _ in range(2):
+        try:
+            rows = psutil.Process(pid).threads()
+        except psutil.Error:
+            return None
+        now = time.monotonic()
+        with _threads_lock:
+            seen = _threads_seen
+            same = seen["pid"] == pid
+            if same and seen["result"] is not None and now - seen["at"] < _THREADS_FRESH_SECONDS:
+                return seen["result"]
+            gap = now - seen["at"] if same else None
+            used_now = {row.id: row.user_time + row.system_time for row in rows}
+            if gap is None:
+                seen.update(pid=pid, at=now, cpu=used_now, result=None)
+        if gap is None:
+            time.sleep(0.5)                       # the first look has nothing to compare with
+            continue
+        names = _thread_names(pid)
+        threads = []
+        for tid, used in used_now.items():
+            before = seen["cpu"].get(tid)
+            name = names.get(tid) or _os_thread_name(pid, tid) or "?"
+            kind, sector = _thread_kind(name)
+            threads.append({
+                "tid": tid, "name": name, "kind": kind, "sector": sector,
+                "sector_name": sector_name(sector) if sector is not None else "",
+                "cpu": round(max(0.0, used - before) / gap * 100, 1) if before is not None else None,
+                "total_s": round(used, 1),
+            })
+        threads.sort(key=lambda row: (-(row["cpu"] or 0.0), -row["total_s"]))
+        result = {"pid": pid, "named": bool(names), "window_s": round(gap, 1),
+                  "cpu_sum": round(sum(row["cpu"] or 0.0 for row in threads), 1),
+                  "threads": threads}
+        with _threads_lock:
+            _threads_seen.update(pid=pid, at=now, cpu=used_now, result=result)
+        return result
+    return None
+
+
 def _machine() -> dict:
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
@@ -171,12 +259,18 @@ def _snapshot(span: str = "1h") -> dict:
                     "players": row.get("players", 0),
                     "total": row.get("total", 0), "npcs": row.get("npcs", 0)}
                    for row in rows[:8]]
+    game = _process_slice("bsgo")
+    threads = _threads_slice(game.get("pid")) if game.get("alive") else None
+    if threads is not None:
+        # summed over the threads, over seconds: a 0.1 s look misses a busy process
+        game["cpu"] = threads["cpu_sum"]
     return {
         "machine": _machine(),
-        "game": _process_slice("bsgo"),
+        "game": game,
         "panel": _process_slice("rebsgo-panel"),
         "live": live,
         "busiest": busiest,
+        "threads": threads,
         "history": _history_slice(span),
     }
 

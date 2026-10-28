@@ -53,13 +53,35 @@
     <h2 class="card-title">{{ t('monitor.busiest') }}</h2>
     <dl class="statlist" id="mon-busy"></dl>
   </section>
+
+  <details class="card col-12 thrcard" id="thr-card" open>
+    <summary class="thr-head">
+      <h2 class="card-title m0">{{ t('monitor.thr.title') }}</h2>
+      <span class="thr-sum mono dim" id="thr-sum"></span>
+    </summary>
+    <div class="thr-tools">
+      <input type="search" id="thr-filter" placeholder="{{ t('monitor.thr.filter') }}"
+             aria-label="{{ t('monitor.thr.filter') }}" autocomplete="off">
+      <label class="nullbox"><input type="checkbox" id="thr-idle"> <span>{{ t('monitor.thr.idle') }}</span></label>
+    </div>
+    <p class="flash flash-warn" id="thr-unnamed" hidden>{{ t('monitor.thr.unnamed') }}</p>
+    <div class="thr-groups" id="thr-groups"></div>
+    <p class="hint mt12">{{ t('monitor.thr.hint') }}</p>
+  </details>
 </div>
 
 <script nonce="{{ nonce }}">
 (function () {
   var S = {{ {"dead": t('monitor.dead'), "threads": t('monitor.threads'),
               "span1h": t('monitor.history.span'), "span24h": t('monitor.span.24h'),
-              "pilots": t('monitor.pilots_short'), "cold": t('sectors.cold')} | tojson }};
+              "pilots": t('monitor.pilots_short'), "cold": t('sectors.cold'),
+              "total": t('monitor.thr.total'), "window": t('monitor.thr.window'),
+              "none": t('monitor.thr.none'), "nodata": t('monitor.thr.nodata'),
+              "measuring": t('monitor.thr.measuring'), "cputime": t('monitor.thr.cputime'),
+              "unknown_sector": t('monitor.thr.unknown_sector'),
+              "kind": {"sector": t('monitor.thr.kind.sector'), "conn": t('monitor.thr.kind.conn'),
+                       "send": t('monitor.thr.kind.send'), "task": t('monitor.thr.kind.task'),
+                       "worker": t('monitor.thr.kind.worker'), "other": t('monitor.thr.kind.other')}} | tojson }};
   var span = {{ span | tojson }};
   var auto = document.getElementById("mon-auto");
   var busy = document.getElementById("mon-busy");
@@ -135,7 +157,105 @@
       var what = document.createElement("dt"); what.className = "dim"; what.textContent = S.cold;
       item.appendChild(what); item.appendChild(document.createElement("dd")); busy.appendChild(item);
     }
+    lastThreads = snap.threads || null;
+    paintThreads();
   }
+
+  /* ---- threads: grouped, filterable, each group folds ------------------ */
+  var thrCard = document.getElementById("thr-card");
+  var thrGroups = document.getElementById("thr-groups");
+  var thrFilter = document.getElementById("thr-filter");
+  var thrIdle = document.getElementById("thr-idle");
+  var thrSum = document.getElementById("thr-sum");
+  var KINDS = ["sector", "conn", "send", "task", "worker", "other"];
+  var lastThreads = null;
+  var groupOpen = { sector: true };
+  try {
+    var kept = JSON.parse(localStorage.getItem("panel_threads") || "{}");
+    if (kept.card === false) { thrCard.open = false; }
+    if (kept.groups) { groupOpen = kept.groups; }
+  } catch (e) {}
+  function keep() {
+    try { localStorage.setItem("panel_threads", JSON.stringify({ card: thrCard.open, groups: groupOpen })); } catch (e) {}
+  }
+  thrCard.addEventListener("toggle", keep);
+
+  function label(row) {
+    if (row.kind === "sector") {
+      return row.sector === null || row.sector === undefined ? S.unknown_sector
+        : row.sector_name + " (#" + row.sector + ")";
+    }
+    return S.kind[row.kind] || row.kind;
+  }
+  function pct(value) { return value === null || value === undefined ? "…" : value.toFixed(1) + "%"; }
+  function el(tag, cls, text) {
+    var node = document.createElement(tag);
+    if (cls) { node.className = cls; }
+    if (text !== undefined) { node.textContent = text; }
+    return node;
+  }
+  function threadRow(row) {
+    var line = el("div", "thr-row");
+    var who = el("div", "thr-who");
+    who.appendChild(el("b", "", label(row)));
+    who.appendChild(el("span", "mono dim", row.name + " · TID " + row.tid));
+    var load = el("div", "thr-load");
+    var meter = el("div", "mbar");
+    var fill = el("i", row.cpu > 90 ? "hot" : row.cpu > 70 ? "warm" : "");
+    fill.style.width = Math.min(100, row.cpu || 0) + "%";
+    meter.appendChild(fill);
+    load.appendChild(meter);
+    load.appendChild(el("b", "mono thr-pct", pct(row.cpu)));
+    line.appendChild(who);
+    line.appendChild(load);
+    line.appendChild(el("span", "mono dim thr-time", S.cputime + " " + Math.round(row.total_s) + " s"));
+    return line;
+  }
+  function paintThreads() {
+    var info = lastThreads;
+    thrGroups.textContent = "";
+    document.getElementById("thr-unnamed").hidden = !info || info.named;
+    if (!info) {
+      thrSum.textContent = "";
+      thrGroups.appendChild(el("p", "dim m0", S.nodata));
+      return;
+    }
+    var needle = thrFilter.value.trim().toLowerCase();
+    var showIdle = thrIdle.checked || needle !== "";
+    var all = info.threads || [];
+    thrSum.textContent = all.length + " " + S.threads + " · " + S.total + " " + info.cpu_sum.toFixed(1) + "%"
+      + (info.window_s ? " · " + S.window + " " + info.window_s + " s" : "");
+    var shown = 0;
+    KINDS.map(function (kind) {
+      var rows = all.filter(function (row) { return row.kind === kind; });
+      var sum = rows.reduce(function (acc, row) { return acc + (row.cpu || 0); }, 0);
+      return { kind: kind, rows: rows, sum: sum };
+    }).sort(function (a, b) { return b.sum - a.sum; }).forEach(function (group) {
+      var rows = group.rows.filter(function (row) {
+        if (!showIdle && !(row.cpu >= 0.5)) { return false; }
+        if (!needle) { return true; }
+        return [row.name, label(row), String(row.sector === null ? "" : row.sector), String(row.tid)]
+          .join(" ").toLowerCase().indexOf(needle) >= 0;
+      });
+      if (!rows.length) { return; }
+      shown += rows.length;
+      var box = el("details", "thr-group");
+      box.open = needle !== "" || !!groupOpen[group.kind];
+      box.addEventListener("toggle", function () {
+        if (!needle) { groupOpen[group.kind] = box.open; keep(); }
+      });
+      var head = el("summary", "thr-ghead");
+      head.appendChild(el("b", "", S.kind[group.kind] || group.kind));
+      head.appendChild(el("span", "mono dim", rows.length + " / " + group.rows.length + " " + S.threads
+        + " · " + group.sum.toFixed(1) + "%"));
+      box.appendChild(head);
+      rows.forEach(function (row) { box.appendChild(threadRow(row)); });
+      thrGroups.appendChild(box);
+    });
+    if (!shown) { thrGroups.appendChild(el("p", "dim m0", S.none)); }
+  }
+  thrFilter.addEventListener("input", paintThreads);
+  thrIdle.addEventListener("change", paintThreads);
 
   paint({{ snap | tojson }});
 

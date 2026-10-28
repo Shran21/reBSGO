@@ -24,6 +24,7 @@ UTVONAL_SZABALYZAT = "/policy-reload"
 UTVONAL_KARBANTARTAS = "/maintenance"
 UTVONAL_RANGLISTA = "/rankings-recalc"
 UTVONAL_ELENGED = "/release"
+UTVONAL_SZALAK = "/threads"
 KULCS_FEJLEC = "X-Panel-Key"
 
 _KERES_HATAR_BAJT = 16384
@@ -89,6 +90,8 @@ class PanelDoor:
                     self._json(*ajto.szektorok())
                 elif self.path == UTVONAL_KARBANTARTAS:
                     self._json(*ajto.karbantartas_allapot())
+                elif self.path == UTVONAL_SZALAK:
+                    self._json(HTTPStatus.OK, ajto.szalak())
                 else:
                     self._json(HTTPStatus.NOT_FOUND, {"error": "no such path"})
 
@@ -176,6 +179,15 @@ class PanelDoor:
             "online": online,
             "sectors": szektoronkent,
         }
+
+    def szalak(self) -> dict:
+        # The operating system cuts a thread's name to 15 bytes ("crew-26 sector ["),
+        # so the panel takes the full names - and with them the sector a thread
+        # runs - from here; it measures the load itself.
+        import os
+        return {"pid": os.getpid(),
+                "threads": [{"tid": szal.native_id, "name": szal.name, "daemon": szal.daemon}
+                            for szal in threading.enumerate() if szal.native_id is not None]}
 
     def mentes(self) -> dict:
         pilotak = [user.pilot_of() for user in self._online_users()]

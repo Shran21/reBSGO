@@ -35,7 +35,7 @@ record("panel", "start", outcome="github.com/Shran21")
 app.mount("/static", StaticFiles(directory=ROOT / "panel" / "static"), name="static")
 templates = Jinja2Templates(directory=ROOT / "panel" / "templates")
 
-ASSET_VERSION = "23"
+ASSET_VERSION = "24"
 
 _OPEN_PATHS = ("/login", "/static/", "/favicon.ico", "/lang/")
 

@@ -75,6 +75,9 @@ class Bridge:
     def sectors(self):
         return self._request("/sectors")
 
+    def threads(self):
+        return self._request("/threads")
+
     def sector_event(self, sector_id: int):
         return self._request("/sector-event", {"sector": int(sector_id)})
 
