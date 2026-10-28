@@ -82,12 +82,16 @@
   </section>
 
   <section class="card col-8">
-    <h2 class="card-title">{{ t('home.busiest') }}</h2>
-    {% if busiest %}
-      {% for row in busiest %}
-      <div class="busy-row"><a href="/sectors#s{{ row.id }}">{{ row.name }}</a>
+    <h2 class="card-title">{{ t('home.populated') }}{% if populated %} · {{ populated | length }}{% endif %}</h2>
+    {% if populated %}
+      {% for row in populated %}
+      <div class="busy-row">
+        <span class="where"><a href="/sectors#s{{ row.id }}">{{ row.name }}</a>
+          {% if row.who %}<span class="who">{{ row.who[:12] | join(', ') }}{% if row.who | length > 12 %} +{{ row.who | length - 12 }}{% endif %}</span>{% endif %}</span>
         <span class="mono dim">{{ row.players }} {{ t('monitor.pilots_short') }} · {{ row.npcs }} NPC</span></div>
       {% endfor %}
+    {% elif live %}
+      <p class="dim m0">{{ t('home.nobody') }}</p>
     {% else %}
       <p class="dim m0">{{ t('sectors.cold') }}</p>
     {% endif %}

@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import collections
+import time
+import urllib.parse
+
 from fastapi import Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from panel.app import app, bridge, csrf_ok, database, gatekeeper, page
 from panel.auditlog import record
 from panel.db import RESOURCE_GUIDS
+from panel.i18n import translator
 from panel.sectors import sector_name
 from rebsgo.admission.passwords import JelszoHiba
 from rebsgo.vocabulary.pilot import ServerRoles
@@ -42,9 +48,42 @@ _ORDERS = {
 }
 
 
+_SEEN_DAYS = {"7": 7, "30": 30, "90": 90}
+
+
+def _filtered(pilots: list, faction: str, state: str, role: str, pw: str, seen: str) -> list:
+    if faction in ("0", "1", "2"):
+        pilots = [pilot for pilot in pilots if int(pilot["faction"] or 0) == int(faction)]
+    if state == "online":
+        pilots = [pilot for pilot in pilots if pilot["is_online"]]
+    elif state == "offline":
+        pilots = [pilot for pilot in pilots if not pilot["is_online"]]
+    elif state == "banned":
+        pilots = [pilot for pilot in pilots if pilot["is_banned"]]
+    elif state == "free":
+        pilots = [pilot for pilot in pilots if not pilot["is_banned"]]
+    if role == "none":
+        pilots = [pilot for pilot in pilots if not pilot["role_names"]]
+    elif role == "any":
+        pilots = [pilot for pilot in pilots if pilot["role_names"]]
+    elif role in EDITABLE_ROLES:
+        pilots = [pilot for pilot in pilots if role in pilot["role_names"]]
+    if pw in ("yes", "no"):
+        pilots = [pilot for pilot in pilots if bool(pilot["has_password"]) == (pw == "yes")]
+    if seen == "never":
+        pilots = [pilot for pilot in pilots if pilot["last_seen_at"] is None]
+    elif seen in _SEEN_DAYS:
+        # inactive for at least that long; one who never left the game counts too
+        cutoff = time.time() - _SEEN_DAYS[seen] * 86400
+        pilots = [pilot for pilot in pilots
+                  if pilot["last_seen_at"] is None or pilot["last_seen_at"] < cutoff]
+    return pilots
+
+
 @app.get("/users", response_class=HTMLResponse)
 async def users_list(request: Request, q: str = "", sort: str = "online", desc: int = 0,
-                     notice: str = "", error: str = ""):
+                     faction: str = "", state: str = "", role: str = "", pw: str = "",
+                     seen: str = "", notice: str = "", error: str = "", detail: str = ""):
     whereabouts = _whereabouts()
     banned = database.bans()
     pilots = database.pilots()
@@ -54,14 +93,182 @@ async def users_list(request: Request, q: str = "", sort: str = "online", desc: 
         pilot["is_online"] = pilot["id"] in whereabouts
         pilot["online_sector"] = whereabouts.get(pilot["id"])
         pilot["is_banned"] = pilot["id"] in banned
+    total = len(pilots)
     needle = q.strip().lower()
     if needle:
         pilots = [pilot for pilot in pilots if needle in str(pilot["name"] or "").lower()]
+    pilots = _filtered(pilots, faction, state, role, pw, seen)
     order = sort if sort in _ORDERS else "online"
     pilots.sort(key=_ORDERS[order], reverse=bool(desc))
-    return page(request, "users.html", pilots=pilots, q=q.strip(), sort=order, desc=1 if desc else 0,
-                may_create=request.state.session.wears(ServerRoles.Developer),
-                notice=notice, error=error)
+    filters = {"q": q.strip(), "faction": faction, "state": state, "role": role,
+               "pw": pw, "seen": seen}
+    # the sort links and the bulk form's way back keep the filters as they are
+    query = urllib.parse.urlencode({key: value for key, value in filters.items() if value})
+    here = urllib.parse.urlencode({**{key: value for key, value in filters.items() if value},
+                                   "sort": order, "desc": 1 if desc else 0})
+    session = request.state.session
+    may = {"ban": session.wears_any(ServerRoles.Developer, ServerRoles.Ban),
+           "kick": session.can_console,
+           "resources": session.wears_any(ServerRoles.Developer, ServerRoles.Edit),
+           "roles": session.wears(ServerRoles.Developer),
+           "erase": session.wears(ServerRoles.Developer)}
+    return page(request, "users.html", pilots=pilots, total=total, q=q.strip(), sort=order,
+                desc=1 if desc else 0, filters=filters,
+                filtered=any(filters.values()), query=query, here="/users?" + here,
+                roles=EDITABLE_ROLES, resources=RESOURCE_GUIDS, may=may,
+                may_bulk=any(may.values()),
+                may_create=session.wears(ServerRoles.Developer),
+                notice=notice, error=error, detail=detail)
+
+
+# action -> who may run it: any of these roles; None = the console right
+_BULK = {
+    "ban": (ServerRoles.Developer, ServerRoles.Ban),
+    "unban": (ServerRoles.Developer, ServerRoles.Ban),
+    "kick": None,
+    "resources": (ServerRoles.Developer, ServerRoles.Edit),
+    "role_add": (ServerRoles.Developer,),
+    "role_remove": (ServerRoles.Developer,),
+    "erase": (ServerRoles.Developer,),
+}
+
+
+class _BulkRefused(Exception):
+    def __init__(self, key: str):
+        super().__init__(key)
+        self.key = key
+
+
+def _bulk_apply(session, action: str, ids: list, form) -> collections.Counter:
+    tally = collections.Counter()
+    known = {pilot["id"] for pilot in database.pilots()}
+    online = set()
+    if action == "ban":
+        from datetime import datetime, timedelta, timezone
+        hours = _BAN_HOURS.get(str(form.get("length", "")))
+        if hours is None:
+            raise _BulkRefused("ban.length")
+        reason = str(form.get("reason", "")).strip()[:200]
+        until = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat()
+    if action in ("ban", "kick"):
+        online = bridge.online_ids()
+    if action == "resources":
+        add = form.get("mode") == "add"
+        amounts = {}
+        for guid, _key in RESOURCE_GUIDS:
+            raw = str(form.get(f"amount_{guid}", "")).replace(" ", "")
+            if not raw:
+                continue
+            try:
+                amounts[guid] = int(raw)
+            except ValueError:
+                raise _BulkRefused("bulk.amount") from None
+        if not amounts:
+            raise _BulkRefused("bulk.amount")
+        names = dict(RESOURCE_GUIDS)
+    if action in ("role_add", "role_remove"):
+        role = str(form.get("role", ""))
+        if role not in EDITABLE_ROLES:
+            raise _BulkRefused("bulk.role")
+        bit = getattr(ServerRoles, role).value
+    for pilot_id in ids:
+        if pilot_id not in known:
+            tally["missing"] += 1
+            continue
+        # no locking oneself out: not banned, erased or stripped of a role by one's own hand
+        if pilot_id == session.pilot_id and action in ("ban", "erase", "role_remove"):
+            tally["self"] += 1
+            continue
+        if action == "ban":
+            database.set_ban(pilot_id, until, reason, session.name)
+            record(session.name, "ban.set", target=f"pilot={pilot_id}",
+                   outcome=f"until={until} reason={reason!r} (bulk)")
+            if pilot_id in online:
+                bridge.console(session.pilot_id, f"pilot.kick {pilot_id}")
+                record(session.name, "pilot.kick", target=f"pilot={pilot_id}", outcome="on ban (bulk)")
+        elif action == "unban":
+            if not database.clear_ban(pilot_id):
+                tally["unchanged"] += 1
+                continue
+            record(session.name, "ban.clear", target=f"pilot={pilot_id}", outcome="ok (bulk)")
+        elif action == "kick":
+            if pilot_id not in online:
+                tally["offline"] += 1
+                continue
+            answer = bridge.console(session.pilot_id, f"pilot.kick {pilot_id}")
+            record(session.name, "pilot.kick", target=f"pilot={pilot_id}",
+                   outcome=("down" if answer is None else "sent") + " (bulk)")
+            if answer is None:
+                tally["failed"] += 1
+                continue
+        else:
+            # these write the pilot's own rows: only while the pilot is out of the game
+            if bridge.release(pilot_id) == "online":
+                tally["online"] += 1
+                continue
+            if action == "erase":
+                removed = database.erase_pilot(pilot_id)
+                record(session.name, "account.erase", target=f"pilot={pilot_id}",
+                       outcome="; ".join(f"{table}={count}" for table, count in sorted(removed.items()))
+                       + " (bulk)")
+            elif action == "resources":
+                held = {row["guid"]: row["amount"] for row in database.resources(pilot_id)} if add else {}
+                changed_any = False
+                for guid, amount in amounts.items():
+                    new = held.get(guid, 0) + amount if add else amount
+                    changed, old = database.set_resource(pilot_id, guid, new)
+                    if changed:
+                        changed_any = True
+                        record(session.name, "resource.set", target=f"pilot={pilot_id} {names[guid]}",
+                               outcome=f"{old} -> {max(0, new)} (bulk)")
+                if not changed_any:
+                    tally["unchanged"] += 1
+                    continue
+            else:
+                pilot = database.pilot(pilot_id)
+                bits = int(pilot["roles_bits"] or 0)
+                new_bits = bits | bit if action == "role_add" else bits & ~bit
+                if new_bits == bits:
+                    tally["unchanged"] += 1
+                    continue
+                database.set_role_bits(pilot_id, new_bits)
+                record(session.name, "roles.set", target=f"pilot={pilot_id}",
+                       outcome=f"bits={new_bits} (bulk)")
+        tally["done"] += 1
+    return tally
+
+
+@app.post("/users/bulk")
+async def bulk_users(request: Request):
+    form = await request.form()
+    session = request.state.session
+    back = str(form.get("back", ""))
+    if not back.startswith("/users") or back.startswith("//"):
+        back = "/users"
+    join = "&" if "?" in back else "?"
+    if not csrf_ok(request, str(form.get("csrf", ""))):
+        return RedirectResponse(f"{back}{join}error=csrf.failed", status_code=303)
+    action = str(form.get("action", ""))
+    if action not in _BULK:
+        return RedirectResponse(f"{back}{join}error=bulk.unknown", status_code=303)
+    allowed = _BULK[action]
+    if not (session.can_console if allowed is None else session.wears_any(*allowed)):
+        return RedirectResponse(f"{back}{join}error=bulk.denied", status_code=303)
+    ids = sorted({int(raw) for raw in form.getlist("ids") if str(raw).isdigit()})
+    if not ids:
+        return RedirectResponse(f"{back}{join}error=bulk.none", status_code=303)
+    try:
+        tally = await run_in_threadpool(_bulk_apply, session, action, ids, form)
+    except _BulkRefused as refusal:
+        return RedirectResponse(f"{back}{join}error={refusal.key}", status_code=303)
+    record(session.name, f"bulk.{action}", target=f"pilots={len(ids)}",
+           outcome=" ".join(f"{key}={count}" for key, count in sorted(tally.items())) or "nothing")
+    t = translator(request.state.lang)
+    detail = " · ".join(f"{t('bulk.r.' + key)}: {tally[key]}"
+                        for key in ("done", "unchanged", "online", "offline", "self", "missing", "failed")
+                        if tally[key] or key == "done")
+    return RedirectResponse(f"{back}{join}" + urllib.parse.urlencode(
+        {"notice": "bulk.done", "detail": detail}), status_code=303)
 
 
 @app.get("/users/{pilot_id}", response_class=HTMLResponse)

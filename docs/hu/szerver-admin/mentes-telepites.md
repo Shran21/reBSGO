@@ -54,25 +54,25 @@ telepítő maga adja vissza.
 
 A telepítő hálózat nélkül dolgozik:
 
-1. kibontja a **hozott Python 3.13-at** a `runtime/python` alá. Ez
-   x86_64-re készült: más processzoron, vagy ha nincs csomagolt értelmező,
-   a rendszer python3-at használja (3.11 vagy újabb kell; a natív
-   gyorsítómodulhoz x86_64 és 3.13);
+1. kibontja a **hozott Python 3.14-et** (a GIL nélküli, szabad szálú
+   változatot) a `runtime/python` alá; frissítéskor az ott lévő régebbit
+   lecseréli. Ez x86_64-re készült: más processzoron, vagy ha nincs
+   csomagolt értelmező, a rendszer python3-at használja (3.11 vagy újabb
+   kell);
 2. létrehozza a mappákat, futtathatóvá teszi a szkripteket (`install.sh`,
    `WebPanel/run.sh`, `tools/*.py`), és ha nincs `.env`, generál egyet friss
    panel-tokennel — ezt csak a tulajdonosa olvashatja —, és bekapcsolja
    benne a szektor-altatást (`REBSGO_SECTOR_GATING_MODE=idle`, lásd lent),
    ha a `.env` erről még nem rendelkezik;
-3. ellenőrzi, hogy a szerverkód betölt-e, és hogy a **natív gyorsítómodul**
-   (`native/lib`, a fában szállítva) aktív-e;
+3. ellenőrzi, hogy a szerverkód betölt-e, és hogy GIL nélkül fut-e;
 4. felépíti a panel venv-jét a `WebPanel/vendor/wheels` készletből (ami
-   ebből nem illik a géphez — más processzoron, vagy nem 3.13-as
-   Pythonnal —, azt a PyPI-ról tölti le, ehhez hálózat kell; amihez ott
+   ebből nem illik a géphez — más processzoron, vagy nem 3.14t-s, illetve
+   3.13-as Pythonnal —, azt a PyPI-ról tölti le, ehhez hálózat kell; amihez ott
    sincs kész csomag erre a gépre, azt helyben fordítja, és ha ehhez
    hiányzik a `python3-dev` vagy a `gcc`, rootként apt-get-tel felteszi;
    a pip naplója: `logs/panel-pip.log`), és
-   megírja a `WebPanel/panel.env`-et: a panel csak a saját gépéről nyílik
-   (`PANEL_HOST=127.0.0.1`), a fájlt csak a tulajdonosa olvashatja;
+   megírja a `WebPanel/panel.env`-et: a panel minden hálózati címen
+   elérhető (`PANEL_HOST=0.0.0.0`), a fájlt csak a tulajdonosa olvashatja;
 5. ha még nincs Developer szerepű fiók, bekéri az **első admin fiókot**
    (név, majd kétszer a jelszó; Enter = kihagyás). Ez Developer és Console
    szerepet kap, ezzel lehet belépni a WebPanelbe. Terminál nélkül csak

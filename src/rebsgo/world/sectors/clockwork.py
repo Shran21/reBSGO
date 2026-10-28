@@ -46,7 +46,7 @@ from rebsgo.helpers.rolling_latency_stats import (
     should_warn_count,
     should_warn_interval,
 )
-from rebsgo.native.hotpath import filter_possible_enemy_ids, should_use_native_relation_prefilter
+from rebsgo.helpers.hotpath import filter_possible_enemy_ids
 from rebsgo.protocol.game.game_replies import GameReplies
 from rebsgo.protocol.notification import MinerAlarm
 from rebsgo.protocol.protocol_id import ProtocolID
@@ -1483,9 +1483,6 @@ class NpcRounds(AfterDelay):
             "spatial_cells": 0,
             "spatial_queries": 0,
             "spatial_candidates": 0,
-            "native_relation_prefilter_used": 0,
-            "native_relation_prefilter_candidates": 0,
-            "native_relation_prefilter_matches": 0,
             "target_cache_hits": 0,
             "target_cache_misses": 0,
             "target_phase_skips": 0,
@@ -1510,9 +1507,6 @@ class NpcRounds(AfterDelay):
             "spatial_cells": spatial_stats.cells if spatial_stats is not None else 0,
             "spatial_queries": 0,
             "spatial_candidates": 0,
-            "native_relation_prefilter_used": 0,
-            "native_relation_prefilter_candidates": 0,
-            "native_relation_prefilter_matches": 0,
             "target_cache_hits": 0,
             "target_cache_misses": 0,
             "target_phase_skips": 0,
@@ -1761,7 +1755,6 @@ class NpcRounds(AfterDelay):
                 )
                 for jelolt in jeloltek
             ]
-            native_will_run = should_use_native_relation_prefilter(len(feljegyzesek))
             allowed_ids = set(filter_possible_enemy_ids(
                 feljegyzesek,
                 against.id_in_space(),
@@ -1769,9 +1762,6 @@ class NpcRounds(AfterDelay):
                 against.faction_group.value,
                 target_bracket_mode == TargetBracketMode.AllEnemy,
             ))
-            self._record_targeting_stat("native_relation_prefilter_used", 1 if native_will_run else 0)
-            self._record_targeting_stat("native_relation_prefilter_candidates", len(feljegyzesek))
-            self._record_targeting_stat("native_relation_prefilter_matches", len(allowed_ids))
             return tuple(jelolt for jelolt in jeloltek if jelolt.id_in_space() in allowed_ids)
         except Exception:
             log.exception("NPC relation prefilter failed; falling back to Python relation scan")
@@ -2917,6 +2907,10 @@ class PropertyFlush(AfterDelay):
         dirty_objects = 0
         sent_buffers = 0
         errors = 0
+        # A kész statcsomagok feliratkozónként (játékos + protokoll) egy kötegben mennek ki a kör végén:
+        # N játékosnál a feliratkozások száma N*(N-1), és objektumonkénti külön küldéssel 40 játékosnál
+        # tickenként ~1560 küldés volt.
+        gyujto: list = []
         for space_object in self.sector_objects.values():
             object_count += 1
             try:
@@ -2924,11 +2918,27 @@ class PropertyFlush(AfterDelay):
                 if not space_subscribe_info.has_pending_space_property_buffer:
                     continue
                 dirty_objects += 1
-                sent_buffers += space_subscribe_info.flush_property_buffer()
+                sent_buffers += space_subscribe_info.flush_property_buffer(gyujto)
             except Exception:
                 errors += 1
                 log.exception("Unknown error in delayed update for send space subscribe info; space_object=%s",
                               space_object)
+        if gyujto:
+            kotegek: dict = {}
+            for feed, subscriber, bw in gyujto:
+                koteg = kotegek.get(subscriber)
+                if koteg is None:
+                    koteg = kotegek[subscriber] = ([], [])
+                koteg[0].append(bw)
+                koteg[1].append(feed)
+            for subscriber, (csomagok, feedek) in kotegek.items():
+                try:
+                    if not subscriber.send_property_packet(csomagok):
+                        for feed in feedek:
+                            feed.remove_subscriber(subscriber)
+                except Exception:
+                    errors += 1
+                    log.exception("Unknown error while sending batched property buffers; subscriber=%s", subscriber)
         self._last_stats = {
             "objects": object_count,
             "dirty_objects": dirty_objects,
@@ -2950,6 +2960,17 @@ class PropertyFlush(AfterDelay):
 
     def last_stats(self) -> dict:
         return dict(self._last_stats)
+
+
+class WearFlush(AfterDelay):
+    """A ritkított tartóssági/rekesz-frissítések kiküldése (harm/damage_wear.py WearFromDamage)."""
+
+    def __init__(self, tick, sector_objects, utem_ora: int, kopas):
+        super().__init__(tick, sector_objects, utem_ora)
+        self._kopas = kopas
+
+    def on_due(self) -> None:
+        self._kopas.flush_pending()
 
 
 class StateFlush(AfterDelay):

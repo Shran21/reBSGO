@@ -35,7 +35,7 @@ from rebsgo.world.sectors.sector_loop import Sector
 from rebsgo.world.sectors.sector_parts import SectorCatalogue
 from rebsgo.world.sectors.spawner import Spawner
 from rebsgo.world.sectors.heartbeat import Tick, utemre
-from rebsgo.world.sectors.clockwork import GROUP_MAINTENANCE, BoostUpkeep, CometPass, CarrierAnchorFollowTimer, CombatClock, DebrisCargoTimer, DebrisFieldTimer, ShipRecovery, ArrivalCountdown, JumpTargetTransponderTimer, JumpCountdown, LeaveCountdown, MiningHistoryTrim, MinerHunters, MinerRounds, MineTimer, MissileFlight, MovementPulse, AnnounceRounds, NpcSteering, NpcUpkeep, SubsystemWatch, ReadinessDrain, OutpostBeaconTimer, OutpostRepair, OutpostPlatformTimer, SectorEventTimer, OutpostArrivals, ComputerCooldown, ModifierExpiry, PropertyFlush, StateFlush, SpawnClock, ClockworkStep, VisibilitySweep
+from rebsgo.world.sectors.clockwork import GROUP_MAINTENANCE, BoostUpkeep, CometPass, CarrierAnchorFollowTimer, CombatClock, DebrisCargoTimer, DebrisFieldTimer, ShipRecovery, ArrivalCountdown, JumpTargetTransponderTimer, JumpCountdown, LeaveCountdown, MiningHistoryTrim, MinerHunters, MinerRounds, MineTimer, MissileFlight, MovementPulse, AnnounceRounds, NpcSteering, NpcUpkeep, SubsystemWatch, ReadinessDrain, OutpostBeaconTimer, OutpostRepair, OutpostPlatformTimer, SectorEventTimer, OutpostArrivals, ComputerCooldown, ModifierExpiry, PropertyFlush, StateFlush, SpawnClock, ClockworkStep, VisibilitySweep, WearFlush
 from rebsgo.world.sectors.areas.areas import SectorAreas
 from rebsgo.vocabulary.world import ArrivalCause, ObjectKind, WellKnownCard
 from rebsgo.vocabulary.pilot import Faction, ResourceKind
@@ -341,6 +341,7 @@ class SectorSource:
             jump_book, spawn_runner, object_forge, arrival_gate,
             cast_desk, damage_log, galaxy_card, mining_ship_operations,
             damage_book)
+        orak.append(WearFlush(tick, sector_objects, utemre(0.5), damage_durability_modifier))
         timer_updater = ClockworkStep(tick, orak, ctx.blueprint().sector_desc.sector_id)
 
         remover.watch_with(sector_outpost_progress)

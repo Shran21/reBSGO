@@ -1548,6 +1548,15 @@ class PlayerProtocol(BgoProtocol):
         bw = self._writer.space_property_buffer(property_buffer)
         return self.user().send(bw)
 
+    def property_packet(self, property_buffer):
+        return self._writer.space_property_buffer(property_buffer)
+
+    def send_property_packet(self, bw) -> bool:
+        if self.user() is None:
+            log.error('pending changes have nobody to go to')
+            return False
+        return self.user().send(bw)
+
     def user_id(self) -> int:
         return self.user().pilot_of().user_id_of()
 

@@ -5,10 +5,10 @@
 <div class="page-head">
   <h1>{{ t('users.title') }}</h1>
   <span class="spacer"></span>
-  <span class="sub">{{ pilots | length }} {{ t('users.count_suffix') }}{% if q %} · {{ t('users.filtered') }}{% endif %}</span>
+  <span class="sub">{{ pilots | length }}{% if filtered %} / {{ total }}{% endif %} {{ t('users.count_suffix') }}{% if filtered %} · {{ t('users.filtered') }}{% endif %}</span>
 </div>
 
-{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}{% if detail %} <span class="mono">· {{ detail }}</span>{% endif %}</p>{% endif %}
 {% if error %}<p class="flash flash-error">{{ t(error) }}</p>{% endif %}
 
 {% if may_create %}
@@ -34,21 +34,44 @@
 <form class="filterbar" method="get" action="/users">
   <input type="search" name="q" value="{{ q }}" placeholder="{{ t('users.search') }}"
          aria-label="{{ t('users.search') }}">
+  {% macro valaszto(nev, cimke, opciok) -%}
+  <select name="{{ nev }}" aria-label="{{ cimke }}" {% if filters[nev] %}class="is-set"{% endif %}>
+    {% for ertek, szoveg in opciok %}
+    <option value="{{ ertek }}" {% if filters[nev] == ertek %}selected{% endif %}>{{ szoveg }}</option>
+    {% endfor %}
+  </select>
+  {%- endmacro %}
+  {{ valaszto('faction', t('users.faction'), [('', t('users.f.faction.all')), ('1', t('faction.colonial')),
+      ('2', t('faction.cylon')), ('0', t('faction.neutral'))]) }}
+  {{ valaszto('state', t('users.f.state'), [('', t('users.f.state.all')), ('online', t('users.f.state.online')),
+      ('offline', t('users.f.state.offline')), ('banned', t('users.f.state.banned')),
+      ('free', t('users.f.state.free'))]) }}
+  {% set szerepek = [('', t('users.f.role.all')), ('any', t('users.f.role.any')), ('none', t('users.f.role.none'))] %}
+  {% for role in roles %}{% set _ = szerepek.append((role, role)) %}{% endfor %}
+  {{ valaszto('role', t('users.roles'), szerepek) }}
+  {{ valaszto('pw', t('users.password'), [('', t('users.f.pw.all')), ('yes', t('users.f.pw.yes')),
+      ('no', t('users.f.pw.no'))]) }}
+  {{ valaszto('seen', t('users.last_seen'), [('', t('users.f.seen.all')), ('7', t('users.f.seen.7')),
+      ('30', t('users.f.seen.30')), ('90', t('users.f.seen.90')), ('never', t('users.f.seen.never'))]) }}
   <input type="hidden" name="sort" value="{{ sort }}">
   <input type="hidden" name="desc" value="{{ desc }}">
-  <button class="btn" type="submit">{{ t('db.search') | replace('…', '') }}</button>
-  {% if q %}<a class="btn" href="/users">{{ t('users.clear') }}</a>{% endif %}
+  <button class="btn" type="submit">{{ t('users.f.apply') }}</button>
+  {% if filtered %}<a class="btn" href="/users">{{ t('users.clear') }}</a>{% endif %}
 </form>
 
 <div class="card table-card col-12" data-refresh="10">
   <div class="scroll-x">
-    <table class="cardable">
+    <table class="cardable usertable">
       <thead>
         <tr>
           {% macro rendezo(kulcs, cimke) -%}
-          <a href="/users?q={{ q | urlencode }}&sort={{ kulcs }}&desc={{ 0 if (sort == kulcs and desc) else (1 if sort == kulcs else 0) }}">
+          <a href="/users?{{ query }}{% if query %}&{% endif %}sort={{ kulcs }}&desc={{ 0 if (sort == kulcs and desc) else (1 if sort == kulcs else 0) }}">
             {{- cimke }}{% if sort == kulcs %} <span class="sortmark">{{ '↓' if desc else '↑' }}</span>{% endif %}</a>
           {%- endmacro %}
+          {% if may_bulk %}
+          <th class="selcell"><label class="selbox" title="{{ t('bulk.all') }}">
+            <input type="checkbox" data-select-all aria-label="{{ t('bulk.all') }}"></label></th>
+          {% endif %}
           <th>{{ rendezo('id', t('users.id')) }}</th>
           <th>{{ rendezo('name', t('users.name')) }}</th>
           <th>{{ t('users.faction') }}</th>
@@ -61,6 +84,11 @@
       <tbody>
         {% for pilot in pilots %}
         <tr class="rowlink" tabindex="0" data-href="/users/{{ pilot.id }}">
+          {% if may_bulk %}
+          <td class="selcell"><label class="selbox">
+            <input type="checkbox" name="ids" value="{{ pilot.id }}" form="bulkform" data-select
+                   aria-label="{{ t('bulk.pick') }}: {{ pilot.name }}"></label></td>
+          {% endif %}
           <td class="mono dim celltiny" data-label="{{ t('users.id') }}">{{ pilot.id }}</td>
           <td class="cardhead">
             <strong>{{ pilot.name }}</strong>
@@ -79,9 +107,79 @@
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
           </td>
         </tr>
+        {% else %}
+        <tr><td colspan="8" class="dim">{{ t('users.f.empty') }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
+
+{% if may_bulk %}
+<form class="bulkbar" id="bulkform" method="post" action="/users/bulk" data-bulk hidden
+      data-ask="{{ t('bulk.confirm') }}" autocomplete="off">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="back" value="{{ here }}">
+  <div class="bulkhead">
+    <b><span data-select-count>0</span> {{ t('bulk.selected') }}</b>
+    <button class="btn btn-small" type="button" data-select-none>{{ t('bulk.clear') }}</button>
+  </div>
+  <div class="bulkrow">
+    <select name="action" data-bulk-action aria-label="{{ t('bulk.action') }}" required>
+      <option value="">{{ t('bulk.action') }}…</option>
+      {% if may.resources %}<option value="resources">{{ t('bulk.a.resources') }}</option>{% endif %}
+      {% if may.roles %}<option value="role_add">{{ t('bulk.a.role_add') }}</option>
+      <option value="role_remove">{{ t('bulk.a.role_remove') }}</option>{% endif %}
+      {% if may.ban %}<option value="ban">{{ t('bulk.a.ban') }}</option>
+      <option value="unban">{{ t('bulk.a.unban') }}</option>{% endif %}
+      {% if may.kick %}<option value="kick">{{ t('bulk.a.kick') }}</option>{% endif %}
+      {% if may.erase %}<option value="erase">{{ t('bulk.a.erase') }}</option>{% endif %}
+    </select>
+
+    {% if may.resources %}
+    <div class="bulkpane" data-bulk-pane="resources" hidden>
+      <select name="mode" aria-label="{{ t('bulk.mode') }}">
+        <option value="set">{{ t('bulk.mode.set') }}</option>
+        <option value="add">{{ t('bulk.mode.add') }}</option>
+      </select>
+      {% for guid, key in resources %}
+      <label class="resin"><span>{{ t(key) }}</span>
+        <input name="amount_{{ guid }}" inputmode="numeric" pattern="-?[0-9 ]*" placeholder="—"></label>
+      {% endfor %}
+      <p class="hint m0">{{ t('bulk.resources.hint') }}</p>
+    </div>
+    {% endif %}
+
+    {% if may.roles %}
+    <div class="bulkpane" data-bulk-pane="role_add role_remove" hidden>
+      <select name="role" aria-label="{{ t('users.roles') }}">
+        {% for role in roles %}<option value="{{ role }}">{{ role }}</option>{% endfor %}
+      </select>
+      <p class="hint m0">{{ t('bulk.roles.hint') }}</p>
+    </div>
+    {% endif %}
+
+    {% if may.ban %}
+    <div class="bulkpane" data-bulk-pane="ban" hidden>
+      <select name="length" aria-label="{{ t('ban.title') }}">
+        <option value="1h">{{ t('ban.h1') }}</option>
+        <option value="24h" selected>{{ t('ban.h24') }}</option>
+        <option value="7d">{{ t('ban.d7') }}</option>
+        <option value="30d">{{ t('ban.d30') }}</option>
+        <option value="forever">{{ t('ban.forever') }}</option>
+      </select>
+      <input name="reason" maxlength="200" placeholder="{{ t('ban.reason') }}">
+    </div>
+    {% endif %}
+
+    {% if may.erase %}
+    <div class="bulkpane" data-bulk-pane="erase" hidden>
+      <p class="hint m0 errtext">{{ t('bulk.erase.hint') }}</p>
+    </div>
+    {% endif %}
+
+    <button class="btn btn-primary" type="submit">{{ t('bulk.run') }}</button>
+  </div>
+</form>
+{% endif %}
 {% endblock %}

@@ -47,7 +47,7 @@ A lap alján külön szekció szerkeszti a `panel.env`-et. A mentett érték a
 
 | Kulcs | Mit állít |
 |---|---|
-| `PANEL_HOST` | melyik címen figyel: alapból `127.0.0.1` (csak ez a gép); `0.0.0.0` = minden hálózaton — nyilvános elérésre inkább TLS-proxy elé |
+| `PANEL_HOST` | melyik címen figyel: alapból `0.0.0.0` (minden hálózaton); `127.0.0.1` = csak ez a gép — nyilvános elérésre inkább TLS-proxy elé |
 | `PANEL_PORT` | a panel portja (alapból 27055) |
 | `PANEL_DB` | a játék-adatbázis útvonala a panel szemével |
 | `PANEL_LOGIN_ROLES` | mely játékbeli szerepekkel lehet belépni |

@@ -339,6 +339,50 @@ def build_application_bootstrap(data_store: Records | None = None,
     return bootstrap
 
 
+def _szemetgyujto_hangolas() -> None:
+    """A Python szemétgyűjtőjének hangolása a felépült világhoz.
+
+    A teljes (2. generációs) gyűjtés minden követett objektumot végignéz, és közben a GIL-t végig tartja: az
+    összes szál (minden szektor, minden kapcsolat) áll. A betöltött világ (katalógus, kártyák, galaxis,
+    szektorok) több százezer objektum; helyben, játékos nélkül egy teljes gyűjtés ~0,3 mp volt, élesben
+    40 játékossal ennél több, és ilyenkor minden szektor egyszerre akadt meg (guardrails: azonos pillanatban
+    lassú tick a legkülönbözőbb szakaszokban). A felépülés után a meglévő objektumokat az állandó generációba
+    tesszük (gc.freeze): ezeket a gyűjtő többé nem nézi végig, a referenciaszámlálás viszont továbbra is
+    felszabadítja, ami elengedhető. rebsgo.gc.thresholds: "g0,g1,g2" a gyűjtési küszöbök (alapból a Pythoné).
+    A guardrails mellett az 50 ms-nál hosszabb gyűjtések figyelmeztetést írnak."""
+    import gc
+    from rebsgo.config.config import Config
+    from rebsgo.helpers.rolling_latency_stats import ENABLED as GUARDRAILS_ENABLED
+
+    cfg = Config.instance()
+    kuszobok = cfg.string("rebsgo.gc.thresholds", None)
+    if kuszobok:
+        try:
+            gc.set_threshold(*(int(x) for x in kuszobok.split(",")))
+        except (TypeError, ValueError):
+            log.warning("gc: unusable thresholds %r, keeping %s", kuszobok, gc.get_threshold())
+    if cfg.bool("rebsgo.gc.freeze-at-startup", True):
+        kezdet = time.perf_counter()
+        gc.collect()
+        gc.freeze()
+        log.info("gc: %s objects frozen after startup in %.0f ms, thresholds %s",
+                 gc.get_freeze_count(), (time.perf_counter() - kezdet) * 1000, gc.get_threshold())
+    if GUARDRAILS_ENABLED or cfg.bool("rebsgo.gc.log-slow", False):
+        hatar_ms = cfg.float("rebsgo.gc.slow-ms", 50.0)
+        kezdetek: dict = {}
+
+        def _figyelo(fazis, info) -> None:
+            if fazis == "start":
+                kezdetek[threading.get_ident()] = time.perf_counter()
+                return
+            elkezdve = kezdetek.pop(threading.get_ident(), None)
+            if elkezdve is not None and (eltelt := (time.perf_counter() - elkezdve) * 1000) >= hatar_ms:
+                log.warning("gc: slow collection generation=%s elapsed_ms=%.0f collected=%s uncollectable=%s",
+                            info.get("generation"), eltelt, info.get("collected"), info.get("uncollectable"))
+
+        gc.callbacks.append(_figyelo)
+
+
 def main(data_store: Records | None = None) -> None:
     import signal
 
@@ -347,6 +391,15 @@ def main(data_store: Records | None = None) -> None:
     log.info("Logging to %s", log_file)
     bootstrap = build_application_bootstrap(data_store)
     bootstrap.on_start_up()
+    _szemetgyujto_hangolas()
+    import platform
+    import sys
+    # GIL nélküli (szabad szálú) Pythonon a GIL-t egy nem támogatott C-kiterjesztés betöltése visszakapcsolhatja:
+    # induláskor (a modulok betöltése után) kiírjuk, ténylegesen hogyan fut.
+    gil = getattr(sys, "_is_gil_enabled", lambda: True)()
+    log.info("python %s %s, GIL %s", platform.python_version(),
+             "free-threading build" if "free-threading" in sys.version else "standard build",
+             "enabled" if gil else "disabled")
 
     stop_event = threading.Event()
 

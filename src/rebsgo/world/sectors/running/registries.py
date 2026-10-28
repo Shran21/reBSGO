@@ -81,8 +81,10 @@ class SectorBook:
             self._executor_service.launch(sector.run)
 
     def sector_by_id(self, id: int):
-        with self._lock:
-            return self._sector_map.get(id)
+        # Zár nélkül: a dict.get egyetlen atomi olvasás, az írók (register/restart) a zár alatt cserélnek.
+        # Ezt sok szál hívja sűrűn (pl. a halál utáni újraéledési lista csillagonként); terhelés alatt a
+        # zár körül a GIL-re várva sorban álltak, és egy-egy szektortick másodpercekig állt miatta.
+        return self._sector_map.get(id)
 
     def restart_sector(self, id: int):
         with self._lock:

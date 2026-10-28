@@ -220,6 +220,7 @@ class Sector:
                     self._sector_command_queue.run_normal()
                     command_ms += elapsed_ms(stage_started_ms)
                     ability_ms = manual_ability_ms + auto_ability_ms
+                    self._flush_tick_broadcast()
 
                 stage_started_ms = now_ms()
                 self._timer_updater.run(gating_decision.timer_mode)
@@ -232,6 +233,7 @@ class Sector:
                 stage_started_ms = now_ms()
                 self._sector_zone_management.run()
                 zone_ms = elapsed_ms(stage_started_ms)
+                self._flush_tick_broadcast()
                 self._sector_command_queue.finish_tick()
                 self._cast_desk.finish_tick()
 
@@ -276,8 +278,7 @@ class Sector:
                         "join_ms=%.1f command_ms=%.1f movement_ms=%.1f collision_ms=%.1f "
                         "manual_ability_ms=%.1f auto_ability_ms=%.1f ability_ms=%.1f timers_ms=%.1f "
                         "remover_ms=%.1f zone_ms=%.1f movement_objects=%s new_maneuvers=%s "
-                        "movement_packets=%s movement_out_of_sector=%s native_out_of_bounds_used=%s "
-                        "native_out_of_bounds_candidates=%s native_out_of_bounds_fallbacks=%s "
+                        "movement_packets=%s movement_out_of_sector=%s "
                         "candidate_objects=%s moving_colliders=%s "
                         "contact_pairs=%s primitive_pairs=%s contact_collisions=%s spatial_enabled=%s "
                         "spatial_cells=%s spatial_global_objects=%s spatial_raw_pairs=%s "
@@ -325,9 +326,6 @@ class Sector:
                         movement_stats.get("new_maneuvers", 0),
                         movement_stats.get("movement_packets", 0),
                         movement_stats.get("out_of_sector_objects", 0),
-                        movement_stats.get("native_out_of_bounds_used", 0),
-                        movement_stats.get("native_out_of_bounds_candidates", 0),
-                        movement_stats.get("native_out_of_bounds_fallbacks", 0),
                         collision_stats.get("candidate_objects", 0),
                         collision_stats.get("moving_colliders", 0),
                         collision_stats.get("contact_pairs", 0),
@@ -430,8 +428,7 @@ class Sector:
             "tick_avg_ms=%.1f tick_p95_ms=%.1f tick_max_ms=%.1f "
             "join_avg_ms=%.1f commands_avg_ms=%.1f commands_p95_ms=%.1f commands_max_ms=%.1f "
             "movement_avg_ms=%.1f movement_p95_ms=%.1f movement_max_ms=%.1f "
-            "movement_out_of_sector=%s native_out_of_bounds_used=%s "
-            "native_out_of_bounds_candidates=%s native_out_of_bounds_fallbacks=%s "
+            "movement_out_of_sector=%s "
             "collision_avg_ms=%.1f collision_p95_ms=%.1f collision_max_ms=%.1f "
             "manual_ability_avg_ms=%.1f manual_ability_p95_ms=%.1f manual_ability_max_ms=%.1f "
             "auto_ability_avg_ms=%.1f auto_ability_p95_ms=%.1f auto_ability_max_ms=%.1f "
@@ -466,9 +463,6 @@ class Sector:
             movement["p95_ms"],
             movement["max_ms"],
             movement_stats.get("out_of_sector_objects", 0),
-            movement_stats.get("native_out_of_bounds_used", 0),
-            movement_stats.get("native_out_of_bounds_candidates", 0),
-            movement_stats.get("native_out_of_bounds_fallbacks", 0),
             collision["avg_ms"],
             collision["p95_ms"],
             collision["max_ms"],
@@ -547,6 +541,11 @@ class Sector:
         for timer_name in _HOTPATH_TIMER_NAMES:
             self._hotpath_timer_stats[timer_name].add(timer_elapsed_ms_by_name.get(timer_name, 0.0))
 
+    def _flush_tick_broadcast(self) -> None:
+        flush = getattr(self._ctx.sender(), "flush_tick", None)
+        if flush is not None:
+            flush()
+
     def _run_auto_ability_stage(self) -> None:
         if SECTOR_PIPELINE_BUDGET_ENABLED:
             self._cast_desk.run_auto_budgeted(reset=False)
@@ -570,9 +569,11 @@ class Sector:
             self._cast_desk.run_manual_only(reset=False)
             self._run_auto_ability_stage()
             self._sector_command_queue.run_normal()
+            self._flush_tick_broadcast()
         self._timer_updater.run(gating_decision.timer_mode)
         self._departures_desk.run()
         self._sector_zone_management.run()
+        self._flush_tick_broadcast()
         self._sector_command_queue.finish_tick()
         self._cast_desk.finish_tick()
 

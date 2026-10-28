@@ -89,6 +89,67 @@
     dialog.querySelector("[data-cancel]").focus();
   }
 
+  /* ---- selection: row checkboxes, select-all, and the bulk bar ---------- */
+  var bulk = doc.querySelector("form[data-bulk]");
+  if (bulk) { setupBulk(bulk); }
+
+  function setupBulk(form) {
+    var last = null;
+    var action = form.querySelector("[data-bulk-action]");
+    function boxes() { return Array.prototype.slice.call(doc.querySelectorAll("input[data-select]")); }
+    function sync() {
+      var all = boxes(), on = all.filter(function (box) { return box.checked; });
+      form.hidden = !on.length;
+      form.querySelectorAll("[data-select-count]").forEach(function (el) { el.textContent = on.length; });
+      doc.querySelectorAll("input[data-select-all]").forEach(function (head) {
+        head.checked = all.length > 0 && on.length === all.length;
+        head.indeterminate = on.length > 0 && on.length < all.length;
+      });
+      var label = action && action.selectedIndex > 0 ? action.options[action.selectedIndex].text : "";
+      form.dataset.askDetail = on.length + " " + tr("bulk.selected", "selected") + (label ? " · " + label : "");
+    }
+    function panes() {
+      var value = action ? action.value : "";
+      form.querySelectorAll("[data-bulk-pane]").forEach(function (pane) {
+        var shown = pane.dataset.bulkPane.split(" ").indexOf(value) >= 0;
+        pane.hidden = !shown;
+        // a hidden pane's fields stay out of the submitted form
+        pane.querySelectorAll("input, select").forEach(function (el) { el.disabled = !shown; });
+      });
+    }
+    doc.addEventListener("click", function (ev) {
+      var box = ev.target.closest && ev.target.closest("input[data-select]");
+      if (!box) { return; }
+      // shift-click: everything between the last clicked box and this one follows it
+      if (ev.shiftKey && last && last !== box) {
+        var all = boxes(), from = all.indexOf(last), to = all.indexOf(box);
+        if (from >= 0 && to >= 0) {
+          all.slice(Math.min(from, to), Math.max(from, to) + 1)
+            .forEach(function (other) { other.checked = box.checked; });
+        }
+      }
+      last = box;
+    });
+    doc.addEventListener("change", function (ev) {
+      var target = ev.target;
+      if (!target.matches) { return; }
+      if (target.matches("input[data-select-all]")) {
+        boxes().forEach(function (box) { box.checked = target.checked; });
+      }
+      if (target === action) { panes(); }
+      if (target.matches("input[data-select], input[data-select-all]") || target === action) { sync(); }
+    });
+    var none = form.querySelector("[data-select-none]");
+    if (none) {
+      none.addEventListener("click", function () {
+        boxes().forEach(function (box) { box.checked = false; });
+        sync();
+      });
+    }
+    panes();
+    sync();
+  }
+
   /* ---- live pages: one event stream, timed polling as the fallback ---- */
   var regions = Array.prototype.slice.call(doc.querySelectorAll("[data-refresh]"));
   if (regions.length) { setupLive(regions); }

@@ -7,6 +7,7 @@ from rebsgo.world.sectors.running.coming_and_going import DepartureWatcher
 from rebsgo.protocol.protocol_id import ProtocolID
 from rebsgo.protocol.protocol_book_replies import replies_for
 from rebsgo.helpers.floats import f32
+import time
 
 
 class SectorDamageLog(DepartureWatcher):
@@ -37,10 +38,16 @@ class SectorDamageLog(DepartureWatcher):
 
 
 class WearFromDamage:
+    # Egy hajó tartóssági és rekesz-frissítése legfeljebb ennyi időnként megy ki. Eddig minden
+    # találatnál (a teljes rekeszlistával, ShipSlots) — sok hajós csatában ez a szektor szálát akasztotta.
+    KULDESI_KOZ_MP = 0.5
+
     def __init__(self, pilotak, sender):
         self._users = pilotak
         self._sender = sender
         self._pilot_wire = replies_for(ProtocolID.Pilot)
+        self._utolso_kuldes: dict[int, float] = {}
+        self._fuggo: set[int] = set()
 
     def took_a_hit(self, sebzes_sor) -> None:
         target_object = sebzes_sor.to
@@ -67,5 +74,28 @@ class WearFromDamage:
                 continue
             rendszer.wear_down(divided_damage)
 
+        pilota_id = target_object.pilot_id()
+        if time.monotonic() - self._utolso_kuldes.get(pilota_id, 0.0) >= self.KULDESI_KOZ_MP:
+            self._kuld(pilota_id, user, active_ship)
+        else:
+            self._fuggo.add(pilota_id)
+
+    def _kuld(self, pilota_id: int, user, active_ship) -> None:
+        self._utolso_kuldes[pilota_id] = time.monotonic()
+        self._fuggo.discard(pilota_id)
         self._sender.push_to(self._pilot_wire.ship_info_durability(active_ship), user)
         self._sender.push_to(self._pilot_wire.ship_slots(active_ship), user)
+
+    def flush_pending(self) -> None:
+        """A ritkítás miatt visszatartott frissítések kiküldése (WearFlush időzítő)."""
+        if not self._fuggo:
+            return
+        most = time.monotonic()
+        for pilota_id in list(self._fuggo):
+            if most - self._utolso_kuldes.get(pilota_id, 0.0) < self.KULDESI_KOZ_MP:
+                continue
+            user = self._users.user(pilota_id)
+            if user is None:
+                self._fuggo.discard(pilota_id)
+                continue
+            self._kuld(pilota_id, user, user.pilot_of().hangar_of().active_ship())

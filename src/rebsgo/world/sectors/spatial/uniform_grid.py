@@ -2,21 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 import math
 from dataclasses import dataclass
 from itertools import combinations
 
 from rebsgo.geometry.primitives.vector3 import Vector3
-from rebsgo.native.hotpath import (
-    candidate_pairs_from_cells,
-    filter_aabb_ids,
-    log_native_event,
-    should_use_native_spatial_filter,
-    should_use_native_spatial_pair_generation,
-)
-
-log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -89,16 +79,6 @@ class UniformGridSpatialIndex:
         self._stats = SpatialStats(len(self._bodies), len(self._cells), len(self._global_bodies), 0, 0)
 
     def pairs(self, needs_pair) -> tuple[list[tuple[object, object]], SpatialStats]:
-        if should_use_native_spatial_pair_generation(len(self._bodies)):
-            try:
-                return self._pairs_native(needs_pair)
-            except Exception:
-                log_native_event(
-                    log,
-                    "spatial_pairs_fallback",
-                    "Native spatial pair generation failed; falling back to Python pair generation",
-                    force=True,
-                )
         return self._pairs_python(needs_pair)
 
     def _pairs_python(self, needs_pair) -> tuple[list[tuple[object, object]], SpatialStats]:
@@ -130,43 +110,6 @@ class UniformGridSpatialIndex:
         )
         return filtered_pairs, self._stats
 
-    def _pairs_native(self, needs_pair) -> tuple[list[tuple[object, object]], SpatialStats]:
-        raw_pairs, pair_ids = candidate_pairs_from_cells(
-            ([body.object_id for body in bodies] for bodies in self._cells.values() if len(bodies) >= 2),
-            (body.object_id for body in self._global_bodies),
-            (body.object_id for body in self._bodies),
-            (self._aabb_record(body) for body in self._bodies),
-        )
-        body_by_id = {body.object_id: body for body in self._bodies}
-        filtered_pairs: list[tuple[object, object]] = []
-        for first_id, second_id in pair_ids:
-            elso = body_by_id.get(first_id)
-            second = body_by_id.get(second_id)
-            if elso is None or second is None:
-                continue
-            first_object = elso.space_object
-            second_object = second.space_object
-            if needs_pair(first_object, second_object):
-                filtered_pairs.append((first_object, second_object))
-
-        self._stats = SpatialStats(
-            self._stats.indexed_objects,
-            self._stats.cells,
-            self._stats.global_objects,
-            int(raw_pairs),
-            len(filtered_pairs),
-        )
-        log_native_event(
-            log,
-            "spatial_pairs_used",
-            "Native spatial pair generation used bodies=%s raw_pairs=%s aabb_pairs=%s filtered_pairs=%s",
-            len(self._bodies),
-            int(raw_pairs),
-            len(pair_ids),
-            len(filtered_pairs),
-        )
-        return filtered_pairs, self._stats
-
     def query_overlaps(self, space_object, needs_pair) -> list[object]:
         query_body = self._body_for_object(space_object)
         if query_body is None:
@@ -182,17 +125,6 @@ class UniformGridSpatialIndex:
                 jeloltek.extend(self._cells.get(cell, ()))
             jeloltek.extend(self._global_bodies)
 
-        if should_use_native_spatial_filter(len(jeloltek)):
-            try:
-                return self._query_overlaps_native(space_object, query_body, jeloltek, needs_pair)
-            except Exception:
-                log_native_event(
-                    log,
-                    "spatial_query_overlaps_fallback",
-                    "Native spatial overlap query failed; falling back to Python overlap query",
-                    force=True,
-                )
-
         for jelolt in jeloltek:
             if jelolt.object_id == query_body.object_id or jelolt.object_id in latott:
                 continue
@@ -202,31 +134,6 @@ class UniformGridSpatialIndex:
             candidate_object = jelolt.space_object
             if needs_pair(space_object, candidate_object):
                 eredmenyek.append(candidate_object)
-        return eredmenyek
-
-    def _query_overlaps_native(self, space_object, query_body: _Body, candidates, needs_pair) -> list[object]:
-        ids = filter_aabb_ids(
-            (self._aabb_record(jelolt) for jelolt in candidates),
-            self._aabb_tuple(query_body.aabb),
-            query_body.object_id,
-        )
-        body_by_id = {body.object_id: body for body in candidates}
-        eredmenyek = []
-        for object_id in ids:
-            jelolt = body_by_id.get(object_id)
-            if jelolt is None:
-                continue
-            candidate_object = jelolt.space_object
-            if needs_pair(space_object, candidate_object):
-                eredmenyek.append(candidate_object)
-        log_native_event(
-            log,
-            "spatial_query_overlaps_used",
-            "Native spatial overlap query used candidates=%s aabb_matches=%s results=%s",
-            len(candidates),
-            len(ids),
-            len(eredmenyek),
-        )
         return eredmenyek
 
     def query_radius(self, center: Vector3, radius: float, predicate=None) -> list[object]:
@@ -248,17 +155,6 @@ class UniformGridSpatialIndex:
                         jeloltek.extend(self._cells.get((x, y, z), ()))
             jeloltek.extend(self._global_bodies)
 
-        if should_use_native_spatial_filter(len(jeloltek)):
-            try:
-                return self._query_radius_native(query_aabb, jeloltek, predicate)
-            except Exception:
-                log_native_event(
-                    log,
-                    "spatial_query_radius_fallback",
-                    "Native spatial radius query failed; falling back to Python radius query",
-                    force=True,
-                )
-
         eredmenyek = []
         latott: set[int] = set()
         for jelolt in jeloltek:
@@ -270,30 +166,6 @@ class UniformGridSpatialIndex:
             candidate_object = jelolt.space_object
             if predicate is None or predicate(candidate_object):
                 eredmenyek.append(candidate_object)
-        return eredmenyek
-
-    def _query_radius_native(self, query_aabb: _Aabb, candidates, predicate=None) -> list[object]:
-        ids = filter_aabb_ids(
-            (self._aabb_record(jelolt) for jelolt in candidates),
-            self._aabb_tuple(query_aabb),
-        )
-        body_by_id = {body.object_id: body for body in candidates}
-        eredmenyek = []
-        for object_id in ids:
-            jelolt = body_by_id.get(object_id)
-            if jelolt is None:
-                continue
-            candidate_object = jelolt.space_object
-            if predicate is None or predicate(candidate_object):
-                eredmenyek.append(candidate_object)
-        log_native_event(
-            log,
-            "spatial_query_radius_used",
-            "Native spatial radius query used candidates=%s aabb_matches=%s results=%s",
-            len(candidates),
-            len(ids),
-            len(eredmenyek),
-        )
         return eredmenyek
 
     @property
@@ -403,18 +275,3 @@ class UniformGridSpatialIndex:
                 for z in range(body.min_cell[2], body.max_cell[2] + 1):
                     yield x, y, z
 
-    @staticmethod
-    def _aabb_record(body: _Body) -> tuple[int, float, float, float, float, float, float]:
-        return (
-            body.object_id,
-            body.aabb.min_x,
-            body.aabb.min_y,
-            body.aabb.min_z,
-            body.aabb.max_x,
-            body.aabb.max_y,
-            body.aabb.max_z,
-        )
-
-    @staticmethod
-    def _aabb_tuple(aabb: _Aabb) -> tuple[float, float, float, float, float, float]:
-        return (aabb.min_x, aabb.min_y, aabb.min_z, aabb.max_x, aabb.max_y, aabb.max_z)

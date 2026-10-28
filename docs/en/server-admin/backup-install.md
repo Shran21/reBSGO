@@ -57,26 +57,27 @@ get theirs back from the installer itself.
 
 The installer works without a network:
 
-1. it unpacks the **Python 3.13 it brought along** under `runtime/python`.
-   That one is built for x86_64: on another processor, or when no
-   interpreter is bundled, it uses the system python3 (3.11 or
-   newer is needed; the native accelerator module needs x86_64 and 3.13);
+1. it unpacks the **Python 3.14 it brought along** (the GIL-free,
+   free-threaded build) under `runtime/python`; on an update it replaces an
+   older one there. That one is built for x86_64: on another processor, or
+   when no interpreter is bundled, it uses the system python3 (3.11 or
+   newer is needed);
 2. it creates the folders, makes the scripts executable (`install.sh`,
    `WebPanel/run.sh`, `tools/*.py`), and if there is no `.env`, it
    generates one with a fresh panel token — readable by its owner only —,
    and switches sector gating on in it (`REBSGO_SECTOR_GATING_MODE=idle`,
    see below) unless `.env` already says something about it;
-3. it checks that the server code loads and that the **native accelerator
-   module** (`native/lib`, shipped in the tree) is active;
+3. it checks that the server code loads, and whether it runs without the
+   GIL;
 4. it builds the panel's venv from the `WebPanel/vendor/wheels` set
    (whatever there does not fit the machine — on another processor, or
-   with a Python other than 3.13 — comes from PyPI, which needs a
+   with a Python other than 3.14t or 3.13 — comes from PyPI, which needs a
    network; whatever PyPI has no ready package for on this machine is
    compiled here, and if `python3-dev` or `gcc` is missing for that, it
    installs them with apt-get as root; pip's log: `logs/panel-pip.log`),
    and
-   writes `WebPanel/panel.env`: the panel opens on its own machine only
-   (`PANEL_HOST=127.0.0.1`), and only the file's owner can read it;
+   writes `WebPanel/panel.env`: the panel is reachable on every network
+   address (`PANEL_HOST=0.0.0.0`), and only the file's owner can read it;
 5. if no account has the Developer role yet, it asks for the **first admin
    account** (a name, then the password twice; Enter = skip). It gets the
    Developer and Console roles, and it is the one that signs in to the

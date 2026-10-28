@@ -35,7 +35,7 @@ record("panel", "start", outcome="github.com/Shran21")
 app.mount("/static", StaticFiles(directory=ROOT / "panel" / "static"), name="static")
 templates = Jinja2Templates(directory=ROOT / "panel" / "templates")
 
-ASSET_VERSION = "22"
+ASSET_VERSION = "23"
 
 _OPEN_PATHS = ("/login", "/static/", "/favicon.ico", "/lang/")
 
@@ -254,16 +254,20 @@ async def home(request: Request, notice: str = "", error: str = ""):
     live = bridge.status()
     if live:
         live["uptime_s"] = uptime_seconds(live)
+    names_in = {}
     for pilot in (live or {}).get("online", []):
         pilot["sector_name"] = sector_name(pilot.get("sector"))
-    busiest = []
+        names_in.setdefault(pilot.get("sector"), []).append(pilot.get("name") or "?")
+    # every sector with a player in it, the fullest first (not only the top few)
+    populated = []
     maintenance = None
     if live:
         rows = [row for row in (bridge.sectors() or {}).get("sectors", []) if row.get("players")]
-        rows.sort(key=lambda row: (row.get("players", 0), row.get("total", 0)), reverse=True)
-        busiest = [{"id": row["id"], "name": sector_name(row["id"]),
-                    "players": row.get("players", 0), "npcs": row.get("npcs", 0)}
-                   for row in rows[:3]]
+        rows.sort(key=lambda row: (-row.get("players", 0), sector_name(row["id"]) or ""))
+        populated = [{"id": row["id"], "name": sector_name(row["id"]),
+                      "players": row.get("players", 0), "npcs": row.get("npcs", 0),
+                      "who": sorted(names_in.get(row["id"], []), key=str.lower)}
+                     for row in rows]
         maintenance = bridge.maintenance()
     session = request.state.session
     return page(request, "home.html",
@@ -272,7 +276,7 @@ async def home(request: Request, notice: str = "", error: str = ""):
                 bridge_wired=bridge.has_token,
                 may_operate=session.wears(ServerRoles.Developer),
                 may_console=session.can_console,
-                busiest=busiest,
+                populated=populated,
                 maintenance=maintenance,
                 health=_health(request),
                 spark=sparkline(online_history()),

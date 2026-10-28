@@ -133,7 +133,7 @@ a:hover { text-decoration: underline; }
 .identity .meta a:hover { color: var(--err); text-decoration: none; }
 
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.content { padding: 30px 34px 60px; max-width: 1120px; width: 100%; margin: 0 auto; }
+.content { padding: 30px 34px 60px; max-width: 1320px; width: 100%; margin: 0 auto; }
 
 .mobilebar { display: none; }
 .scrim { display: none; }
@@ -550,8 +550,12 @@ tr.rowoff td:first-child { text-decoration: line-through; }
 
 .badge-err { border-color: rgba(251, 113, 133, .4); background: var(--err-soft); color: var(--err); }
 
-.sidebar { overflow-y: auto; }
-.nav { min-height: 0; }
+/* The menu keeps its full height and the sidebar scrolls instead: a shrinking menu
+   let the language row and the account block slide over its last items, and those
+   took the clicks. */
+.sidebar { overflow-y: auto; overscroll-behavior: contain; height: 100dvh; }
+.nav { flex: 0 0 auto; }
+.sidebar-foot { flex: 0 0 auto; padding-top: 14px; }
 
 .col-6 { grid-column: span 6; }
 @media (max-width: 900px) { .col-6 { grid-column: span 12; } }
@@ -837,6 +841,68 @@ dialog.palette { width: min(560px, calc(100vw - 32px)); margin-top: 12vh; }
 
 .filterbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 14px; }
 .filterbar input[type="search"] { flex: 1 1 200px; min-width: 160px; max-width: 360px; }
+.filterbar select.is-set { border-color: rgba(52, 211, 153, .45); color: var(--acc-text); }
+
+/* row selection and the bulk bar (users) */
+th.selcell, td.selcell { width: 1%; padding-right: 0; }
+.selbox { display: inline-flex; align-items: center; padding: 4px; margin: -4px; cursor: pointer; }
+.bulkbar {
+  position: sticky; bottom: 14px; z-index: 15;
+  display: flex; flex-direction: column; gap: 10px;
+  margin: 14px 0 0; padding: 14px 16px;
+  background: var(--bg1);
+  border: 1px solid rgba(52, 211, 153, .35); border-radius: var(--r-card);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .4);
+}
+.bulkbar[hidden], .bulkpane[hidden] { display: none; }
+.bulkhead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bulkhead b { font-weight: 620; }
+.bulkrow { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.bulkpane { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; flex: 1 1 100%; order: 1; }
+.bulkrow > .btn { margin-left: auto; }
+.bulkbar select, .bulkbar input:not([type="checkbox"]) {
+  font: inherit; color: var(--text); background: var(--bg2);
+  border: 1px solid var(--line2); border-radius: var(--r-ctl);
+  padding: 8px 11px; width: auto;
+}
+.bulkbar input[name="reason"] { flex: 1 1 220px; }
+.resin { display: inline-flex; flex-direction: column; gap: 3px; }
+.resin span { font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--dim); }
+.resin input { width: 118px !important; font-family: var(--mono); }
+.errtext { color: var(--err); }
+
+/* log files: what is on disk, and removing it */
+.filelist { display: flex; flex-direction: column; }
+.filerow { display: flex; align-items: center; gap: 12px; padding: 8px 0; flex-wrap: wrap; }
+.filerow + .filerow { border-top: 1px solid var(--line); }
+.filerow .fname { flex: 1 1 200px; font-family: var(--mono); font-size: 12.5px; }
+.filerow .fsize { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; min-width: 70px; text-align: right; }
+.filerow form { margin: 0; }
+
+/* sectors with players (overview) */
+.busy-row .who { display: block; color: var(--dim); font-size: 12px; margin-top: 2px; overflow-wrap: anywhere; }
+.busy-row .where { min-width: 0; }
+
+@media (max-width: 800px) {
+  /* on the cards the checkbox sits in the top corner, not on a line of its own */
+  table.cardable tr { position: relative; }
+  table.cardable td.selcell { position: absolute; top: 10px; right: 12px; width: auto; padding: 0 !important; }
+  table.usertable td.cardhead { padding-right: 40px !important; }
+}
+@media (max-width: 900px) {
+  .bulkbar { bottom: 8px; padding: 12px; }
+  .bulkrow > .btn { margin-left: 0; width: 100%; }
+  .bulkbar select[name="action"] { flex: 1 1 100%; }
+}
+@media (max-width: 520px) {
+  .page-head h1 { font-size: 21px; }
+  .card { padding: 16px; }
+  .filterbar select { flex: 1 1 45%; }
+  .filterbar .btn { flex: 1 1 auto; }
+  .resin { flex: 1 1 45%; }
+  .resin input { width: 100% !important; }
+  .busy-row { flex-wrap: wrap; gap: 2px 10px; }
+}
 .logtools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 0 0 10px; }
 .logtools input[type="search"] { flex: 1 1 180px; min-width: 140px; }
 .spanpills { display: inline-flex; gap: 4px; }

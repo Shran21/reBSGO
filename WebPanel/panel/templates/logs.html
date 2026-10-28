@@ -8,7 +8,7 @@
   {% if truncated %}<span class="sub">{{ t('logs.truncated') }}</span>{% endif %}
 </div>
 
-{% if notice %}<p class="flash flash-ok">{{ t(notice) }}</p>{% endif %}
+{% if notice %}<p class="flash flash-ok">{{ t(notice) }}{% if detail %} <span class="mono">· {{ detail }}</span>{% endif %}</p>{% endif %}
 {% if error %}<p class="flash flash-error">{{ t(error) }}</p>{% endif %}
 
 <div class="pillrow">
@@ -49,6 +49,42 @@
 <div class="card term col-12">
   <div class="term-out logpane" id="log-pane"></div>
 </div>
+
+{% if may_turn %}
+<div class="card col-12 mt14">
+  <h2 class="card-title">{{ t('logs.files') }} · {{ channel }}</h2>
+  {% if may_delete %}
+  <div class="filelist">
+    {% for entry in files %}
+    <div class="filerow">
+      <span class="fname">{{ entry.name }}{% if entry.index == 0 %} <span class="badge">{{ t('logs.files.current') }}</span>{% endif %}</span>
+      <span class="fsize">{{ entry.size_text }}</span>
+      <form method="post" action="/logs/delete"
+            data-ask="{{ t('logs.clear.confirm' if entry.index == 0 else 'logs.delete.confirm') }}"
+            data-ask-detail="{{ entry.name }} · {{ entry.size_text }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <input type="hidden" name="channel" value="{{ channel }}">
+        <input type="hidden" name="name" value="{{ entry.name }}">
+        <button class="btn btn-small btn-danger" type="submit">
+          {{ t('logs.clear') if entry.index == 0 else t('logs.delete') }}</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% if old_count %}
+  <form class="mt14" method="post" action="/logs/purge"
+        data-ask="{{ t('logs.purge.confirm') }}" data-ask-detail="{{ old_count }} · {{ old_size }}">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <input type="hidden" name="channel" value="{{ channel }}">
+    <button class="btn btn-danger" type="submit">{{ t('logs.purge') }} ({{ old_count }} · {{ old_size }})</button>
+  </form>
+  {% endif %}
+  <p class="hint">{{ t('logs.files.hint') }}</p>
+  {% else %}
+  <p class="hint m0">{{ t('logs.delete.kept') }}</p>
+  {% endif %}
+</div>
+{% endif %}
 
 {% if log_state %}
 <div class="card col-12 mt14">

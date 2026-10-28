@@ -8,6 +8,6 @@ ENV_HOST=${PANEL_HOST:-}; ENV_PORT=${PANEL_PORT:-}
 PY=./venv/bin/python
 [ -x "$PY" ] || PY=python3
 exec "$PY" -m uvicorn panel.app:app \
-    --host "${PANEL_HOST:-127.0.0.1}" \
+    --host "${PANEL_HOST:-0.0.0.0}" \
     --port "${PANEL_PORT:-27055}" \
     --log-level warning

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import atexit
+import copy
 import logging
 import logging.handlers
 import os
+import queue
 import threading
 from pathlib import Path
 
@@ -28,7 +31,6 @@ _TERULETEK = {
     "rebsgo.wire.links": "wire",
     "rebsgo.store": "boot",
     "rebsgo.gamedata": "boot",
-    "rebsgo.native": "boot",
     "rebsgo.main": "boot",
     "rebsgo.startup": "boot",
     "rebsgo.schedule": "boot",
@@ -178,6 +180,60 @@ class _CsakTeruletek(logging.Filter):
         return not benne if self._kiveve else benne
 
 
+class _SorbaIro(logging.handlers.QueueHandler):
+    """A naplórekordot csak sorba teszi; a fájlokba és a képernyőre a naplózó szál ír.
+
+    Korábban minden naplósor a hívó szálban ment végig mind a hat kezelőn (fájlonként stat-hívások,
+    írás, flush, mindegyik a kezelő zárja alatt). Sok játékosnál a szálak a GIL-ért versengenek, és
+    minden rendszerhívás után sokáig várnak rá: egy-egy naplósor így egy szektor tickjét is
+    másodpercekig megakaszthatta, a zárra várók pedig sorban álltak mögötte.
+    """
+
+    def prepare(self, record: logging.LogRecord) -> logging.LogRecord:
+        # Az üzenet a hívó szálban áll össze (az argumentumok később már megváltozhatnak);
+        # a formázás és a kivétel kiírása a naplózó szálban történik.
+        record = copy.copy(record)
+        record.msg = record.getMessage()
+        record.args = None
+        return record
+
+    def handle(self, record: logging.LogRecord):
+        # Kezelőzár nélkül: a sorba tétel magában is szálbiztos, így a naplózó szál sosem vár másikra.
+        eredmeny = self.filter(record)
+        if isinstance(eredmeny, logging.LogRecord):
+            record = eredmeny
+        if eredmeny:
+            self.emit(record)
+        return eredmeny
+
+
+_hallgato: logging.handlers.QueueListener | None = None
+_kozvetlen_kezelok: list[logging.Handler] = []
+_leallitas_bejegyezve = False
+
+
+def _hatterben_ir() -> bool:
+    ertek = _beallitas("REBSGO_LOG_ASYNC")
+    return ertek is None or ertek.strip().lower() not in ("0", "false", "no", "off", "nem")
+
+
+def _hallgato_leallit() -> None:
+    """Leállításkor a sorban maradt sorok kiírása, utána a késői naplósorok közvetlenül mennek ki."""
+    global _hallgato
+    if _hallgato is None:
+        return
+    _hallgato.stop()
+    _hallgato = None
+    gyoker = logging.getLogger()
+    for regi in list(gyoker.handlers):
+        if isinstance(regi, _SorbaIro):
+            gyoker.removeHandler(regi)
+            for kezelo in _kozvetlen_kezelok:
+                for szuro in regi.filters:
+                    kezelo.addFilter(szuro)
+                gyoker.addHandler(kezelo)
+
+
 def _szint(nev: str | None, alap: int) -> int:
     if not nev:
         return alap
@@ -247,20 +303,39 @@ def bekapcsol(mappa: str | None = None) -> str:
     hibak.addFilter(_CsakTeruletek({AUDIT}, kivéve=True))
 
     kezelok = [kepernyo, szerver, szektor, belepes, hibak, audit_fajl]
-    if szuro is not None:
-        for kezelo in kezelok:
-            kezelo.addFilter(szuro)
 
+    global _hallgato, _kozvetlen_kezelok, _leallitas_bejegyezve
+    _hallgato_leallit()
     gyoker = logging.getLogger()
     gyoker.setLevel(szint)
     for regi in list(gyoker.handlers):
         gyoker.removeHandler(regi)
-    for kezelo in kezelok:
-        gyoker.addHandler(kezelo)
+    hatterben = _hatterben_ir()
+    if hatterben:
+        # A területenkénti szűrés a sorba tételkor dől el (a futás közbeni szintváltás így nem hat vissza
+        # a már sorban álló sorokra, és az elnémított sorok be se kerülnek); a kezelőkön csak a
+        # fájlonkénti szétválogatás marad.
+        sor: queue.SimpleQueue = queue.SimpleQueue()
+        _kozvetlen_kezelok = kezelok
+        _hallgato = logging.handlers.QueueListener(sor, *kezelok, respect_handler_level=True)
+        _hallgato.start()
+        sorba = _SorbaIro(sor)
+        if szuro is not None:
+            sorba.addFilter(szuro)
+        gyoker.addHandler(sorba)
+        if not _leallitas_bejegyezve:
+            # a logging saját leállítója előbb lett bejegyezve, így ez fut le előbb (LIFO)
+            atexit.register(_hallgato_leallit)
+            _leallitas_bejegyezve = True
+    else:
+        for kezelo in kezelok:
+            if szuro is not None:
+                kezelo.addFilter(szuro)
+            gyoker.addHandler(kezelo)
 
     log = logging.getLogger(__name__)
-    log.info('logging configured: level=%s file=%s%s', szint_neve, fajl,
-             f" quieted={hatarok}" if hatarok else "")
+    log.info('logging configured: level=%s file=%s%s%s', szint_neve, fajl,
+             f" quieted={hatarok}" if hatarok else "", "" if hatterben else " sync=true")
     return str(fajl)
 
 

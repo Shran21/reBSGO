@@ -236,5 +236,14 @@ class SubscribeProtocol(BgoProtocol):
         bw = self._writer.space_property_buffer(property_buffer)
         return self.user().send(bw)
 
+    def property_packet(self, property_buffer):
+        return self._writer.space_property_buffer(property_buffer)
+
+    def send_property_packet(self, bw) -> bool:
+        if self.user() is None:
+            log.error('property push with no pilot attached')
+            return False
+        return self.user().send(bw)
+
     def user_id(self) -> int:
         return self._user_id

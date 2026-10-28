@@ -6,7 +6,7 @@ from rebsgo.protocol.messages import GameReply
 from rebsgo.protocol.protocol_id import ProtocolID
 from rebsgo.protocol.reply_base import ReplyBase
 from rebsgo.vocabulary.pilot import FactionGroup, ResourceKind
-from rebsgo.native.hotpath import (
+from rebsgo.helpers.hotpath import (
     encode_combat_info_packet,
     encode_object_left_ids_packet,
     encode_weapon_shot_packet,
@@ -145,46 +145,26 @@ class GameReplies(ReplyBase):
         return bw
 
     def weapon_shot(self, from_obj_id: int, kilovo_pont: int, target_obj_id: int, weapon_fx_type):
-        native_packet = encode_weapon_shot_packet(
+        return WireOut.from_frozen_bytes(encode_weapon_shot_packet(
             self.protocol_id.value,
             GameReply.WeaponShot.value,
             from_obj_id,
             kilovo_pont,
             target_obj_id,
             weapon_fx_type.value,
-        )
-        if native_packet is not None:
-            return WireOut.from_frozen_bytes(native_packet)
-
-        return (self.new_message()
-                .write_msg_type(GameReply.WeaponShot.value)
-                .write_uint32(from_obj_id)
-                .write_uint16(kilovo_pont)
-                .write_uint32(target_obj_id)
-                .write_byte(weapon_fx_type.value))
+        ))
 
     def object_left_ids(self, object_ids, removing_cause):
-        native_packet = encode_object_left_ids_packet(
+        return WireOut.from_frozen_bytes(encode_object_left_ids_packet(
             self.protocol_id.value,
             GameReply.ObjectLeft.value,
             object_ids,
             removing_cause.byte_value,
-        )
-        if native_packet is not None:
-            return WireOut.from_frozen_bytes(native_packet)
-
-        bw = self.new_message()
-        bw.write_msg_type(GameReply.ObjectLeft.value)
-        bw.write_length(len(object_ids))
-        for object_id in object_ids:
-            bw.write_uint32(object_id)
-            bw.write_int32(0)
-            bw.write_byte(removing_cause.byte_value)
-        return bw
+        ))
 
     def combat_info(self, sajat_sebzes: bool, object_id: int, damage: float, wrecked: bool,
                     landed_critical: bool):
-        native_packet = encode_combat_info_packet(
+        return WireOut.from_frozen_bytes(encode_combat_info_packet(
             self.protocol_id.value,
             GameReply.CombatInfo.value,
             sajat_sebzes,
@@ -192,20 +172,7 @@ class GameReplies(ReplyBase):
             damage,
             wrecked,
             landed_critical,
-        )
-        if native_packet is not None:
-            return WireOut.from_frozen_bytes(native_packet)
-
-        bw = self.new_message()
-        bw.write_msg_type(GameReply.CombatInfo.value)
-        bw.write_boolean(sajat_sebzes)
-        bw.write_uint32(object_id)
-        bw.write_single(-damage)
-        destroyed_and_critical = 0
-        destroyed_and_critical |= 1 if wrecked else 0
-        destroyed_and_critical |= 2 if landed_critical else 0
-        bw.write_byte(destroyed_and_critical)
-        return bw
+        ))
 
     def space_property_buffer(self, property_buffer):
         bw = self.new_message()

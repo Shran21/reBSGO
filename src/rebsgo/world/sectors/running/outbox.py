@@ -127,6 +127,22 @@ class SectorOutbox:
         self._space_replies = game_replies()
         self._last_entry_payload_warn_ms = 0.0
         self._last_entry_payload_stats = {}
+        # A tick alatt gyűlő, mindenkinek szóló apró csomagok (pl. lövések): a tick végén egy kötegben
+        # mennek ki (flush_tick), így játékosonként tickenként egy küldés lesz eseményenként egy helyett.
+        self._tick_broadcast: list = []
+
+    def queue_for_everyone(self, bw) -> None:
+        """Mindenkinek szóló csomag a tick végi közös kötegbe (flush_tick)."""
+        if bw is not None:
+            self._tick_broadcast.append(bw)
+
+    def flush_tick(self) -> None:
+        """A tick alatt gyűlt közös csomagok kiküldése egy kötegben (a szektor ciklusa hívja)."""
+        if not self._tick_broadcast:
+            return
+        csomagok, self._tick_broadcast = self._tick_broadcast, []
+        if self.has_clients():
+            self.push_to_everyone(csomagok)
 
     def has_clients(self) -> bool:
         if self._users is None:

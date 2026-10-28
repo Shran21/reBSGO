@@ -11,7 +11,7 @@ from rebsgo.world.sectors.bumping.contact_pair import ContactPair
 from rebsgo.world.sectors.spatial.uniform_grid import UniformGridSpatialIndex
 from rebsgo.world.sectors.sector_parts import SectorStep
 from rebsgo.vocabulary.world import ObjectKind
-from rebsgo.native.hotpath import filter_sphere_pair_indices, log_native_event
+from rebsgo.helpers.hotpath import filter_sphere_pair_indices
 
 log = logging.getLogger(__name__)
 
@@ -104,20 +104,12 @@ class ContactSweep(SectorStep):
             try:
                 overlapping_sphere_indexes = set(filter_sphere_pair_indices(sphere_pair_records))
             except Exception:
-                log.exception("Native sphere collision prefilter failed; falling back to full sphere narrowphase")
+                log.exception("Sphere collision prefilter failed; falling back to full sphere narrowphase")
                 overlapping_sphere_indexes = sphere_pair_indexes
         else:
             overlapping_sphere_indexes = set()
         self._last_stats["sphere_pair_candidates"] = len(sphere_pair_records)
         self._last_stats["sphere_pair_rejected"] = max(0, len(sphere_pair_records) - len(overlapping_sphere_indexes))
-        if sphere_pair_records:
-            log_native_event(
-                log,
-                "collision_sphere_pair_filter_used",
-                "Collision sphere-pair filter candidates=%s rejected=%s",
-                len(sphere_pair_records),
-                max(0, len(sphere_pair_records) - len(overlapping_sphere_indexes)),
-            )
 
         for sorszam, collision_pair in enumerate(pairs_to_check):
             if sorszam in sphere_pair_indexes and sorszam not in overlapping_sphere_indexes:

@@ -12,7 +12,7 @@ from rebsgo.geometry.maths.geometry3d import within_range, weapon_reaches, point
 from rebsgo.geometry.maths.maths import Maths
 from rebsgo.geometry.primitives.vector3 import Vector3
 from rebsgo.helpers.floats import FLOAT_MAX_VALUE
-from rebsgo.native.hotpath import nearest_radius_id, log_native_event
+from rebsgo.helpers.hotpath import nearest_radius_id
 from rebsgo.protocol.protocol_id import ProtocolID
 from rebsgo.protocol.protocol_book_replies import replies_for, game_replies
 from rebsgo.vocabulary.combat import ManeuverKind, WeaponEffect
@@ -122,13 +122,6 @@ class Deed(ABC):
                 FLOAT_MAX_VALUE,
             )
             if closest_id is not None:
-                log_native_event(
-                    log,
-                    "ability_closest_target_lookup_used",
-                    "Ability closest-target lookup candidates=%s selected=%s",
-                    len(feljegyzesek),
-                    closest_id,
-                )
                 return by_id.get(closest_id)
         except Exception:
             log.exception("Ability closest-target lookup failed; falling back to Python scan")
@@ -1139,7 +1132,14 @@ class GunDeed(Deed):
         weapon_shop_bw = space_replies.weapon_shot(
             self._casting_ship.id_in_space(), fegyver_kulcs, target_id, self._weapon_fx_type)
 
-        self._ctx.sender().push_to_everyone(weapon_shop_bw)
+        # Tickenként egy kötegben megy ki (SectorOutbox.flush_tick): sok hajónál a lövésenkénti,
+        # játékosonkénti küldés (lövések × játékosok) a szektor szálát akasztotta meg.
+        sender = self._ctx.sender()
+        queue = getattr(sender, "queue_for_everyone", None)
+        if queue is not None:
+            queue(weapon_shop_bw)
+        else:
+            sender.push_to_everyone(weapon_shop_bw)
 
 
 class PaintDeed(BaneDeed):

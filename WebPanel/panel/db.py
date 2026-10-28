@@ -69,8 +69,19 @@ class Database:
         finally:
             conn.close()
         for row in rows:
+            row["last_seen_at"] = self._moment(row["last_logout_date"])
             row["last_seen"] = self._clock(row.pop("last_logout_date"))
         return rows
+
+    # The stored logout time as a timestamp for the list's filters; None: never.
+    @staticmethod
+    def _moment(raw) -> float | None:
+        if not raw:
+            return None
+        try:
+            return datetime.fromisoformat(str(raw)).timestamp()
+        except ValueError:
+            return None
 
     def pilot(self, pilot_id: int) -> dict | None:
         conn = self.reader()

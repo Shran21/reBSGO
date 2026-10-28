@@ -14,13 +14,13 @@ Linuxon, rootként, egyetlen paranccsal:
 
 Letölti a repót és elindítja a telepítőt. Csak a célmappát (Enter = `/opt/rebsgo`) és az első admin fiókot kérdezi, a többit magától elvégzi. Ahol nincs `curl`: `wget -qO- … | sudo sh`.
 
-**Frissítés:** ugyanezzel a paranccsal. Csak futtasd le újra (ugyanazt a célmappát megadva), és mindent elvégez: letölti az új változatot, lecseréli a kódot, a futó szolgáltatásokat pedig a végén újraindítja. A `.env`, az `sqlite/` (a játékosok adatai) és a helyi beállítások megmaradnak, és ha már van admin fiók, azt sem kérdezi újra.
+**Frissítés:** ugyanezzel a paranccsal. Csak futtasd le újra (ugyanazt a célmappát megadva), és mindent elvégez: letölti az új változatot, lecseréli a kódot (és ha új Python jött vele, az értelmezőt is), a futó szolgáltatásokat pedig a végén újraindítja. A `.env`, az `sqlite/` (a játékosok adatai) és a helyi beállítások megmaradnak, és ha már van admin fiók, azt sem kérdezi újra.
 
 ## Telepítés letöltött vagy klónozott fából
 
     sh install.sh
 
-A telepítő megkérdezi a célmappát, a többit magától elvégzi: kibontja a csomagolt Python 3.13-at (rendszer-Python nem kell hozzá), ellenőrzi a natív gyorsítómodult, felépíti a panel környezetét, elkészíti a `.env`-et, bekéri az első admin fiókot (ezzel lehet belépni a WebPanelbe), végül telepíti és elindítja a `bsgo` és a `rebsgo-panel` szolgáltatást. Hálózati kapcsolat nélkül is végigfut. Az `sh` előtag miatt akkor is elindul, ha a fájl futtatási joga útközben elveszett, például Windowsról feltöltve.
+A telepítő megkérdezi a célmappát, a többit magától elvégzi: kibontja a csomagolt, GIL nélküli Python 3.14-et (rendszer-Python nem kell hozzá), kipróbálja, hogy betölt-e a szerver kódja, felépíti a panel környezetét, elkészíti a `.env`-et, bekéri az első admin fiókot (ezzel lehet belépni a WebPanelbe), végül telepíti és elindítja a `bsgo` és a `rebsgo-panel` szolgáltatást. Hálózati kapcsolat nélkül is végigfut. Az `sh` előtag miatt akkor is elindul, ha a fájl futtatási joga útközben elveszett, például Windowsról feltöltve.
 
 | Szolgáltatás | Cím |
 |---|---|
@@ -47,7 +47,7 @@ Leállítja és eltávolítja a `bsgo` és a `rebsgo-panel` szolgáltatást, maj
 | `launcher/` | a játék indítója |
 | `docs/` | a dokumentációk |
 | `tools/` | fiókkezelés és a launcher fájllistájának elkészítése |
-| `schema/`, `native/`, `vendor/` | adatbázis-séma, natív gyorsítómodul, csomagolt Python |
+| `schema/`, `vendor/` | adatbázis-séma, csomagolt Python |
 
 ## Launcher
 
@@ -68,7 +68,7 @@ A [`docs/`](docs/README.md) mappában, magyarul és angolul, ugyanazokkal az old
 
 ## Technológia
 
-Python 3.13, a csomag hozza magával; a szerver a standard könyvtárra épül. Az adatok SQLite-ban laknak, a forró útvonalakon Rust/PyO3 natív modul gyorsít, lefordítva a fában. A WebPanel FastAPI-ra épül. A játéktartalom JSON-sablonokból jön, nem a kódból. A viselkedést a fejlesztés során pytest-készletek fedik: protokoll, játékszabályok, teljesítmény.
+Python 3.14 GIL nélküli (szabad szálú) változata, a csomag hozza magával: a szektorok szálai párhuzamosan, több magon futnak; a szerver a standard könyvtárra épül. Az adatok SQLite-ban laknak. A WebPanel FastAPI-ra épül.
 
 ## Kapcsolat
 
@@ -103,13 +103,13 @@ On Linux, as root, with a single command:
 
 It downloads the repository and starts the installer. The only questions are the target directory (Enter = `/opt/rebsgo`) and the first admin account; it does the rest on its own. Where there is no `curl`: `wget -qO- … | sudo sh`.
 
-**Updating:** with the same command. Just run it again (giving the same target directory) and it does everything: it downloads the new version, replaces the code, and restarts the running services at the end. `.env`, `sqlite/` (the player data) and the local settings are kept, and once there is an admin account, it does not ask for one again.
+**Updating:** with the same command. Just run it again (giving the same target directory) and it does everything: it downloads the new version, replaces the code (and the interpreter, when a new Python came with it), and restarts the running services at the end. `.env`, `sqlite/` (the player data) and the local settings are kept, and once there is an admin account, it does not ask for one again.
 
 ### Installing from a downloaded or cloned tree
 
     sh install.sh
 
-The installer asks for the target directory and does the rest on its own: it unpacks the bundled Python 3.13 (no system Python needed), checks the native accelerator module, builds the panel's environment, writes `.env`, asks for the first admin account (the one that signs in to the WebPanel), then installs and starts the `bsgo` and `rebsgo-panel` services. It runs through without a network connection. Started with `sh`, it runs even if the file lost its execute permission on the way, uploaded from Windows for one.
+The installer asks for the target directory and does the rest on its own: it unpacks the bundled, GIL-free Python 3.14 (no system Python needed), checks that the server code loads, builds the panel's environment, writes `.env`, asks for the first admin account (the one that signs in to the WebPanel), then installs and starts the `bsgo` and `rebsgo-panel` services. It runs through without a network connection. Started with `sh`, it runs even if the file lost its execute permission on the way, uploaded from Windows for one.
 
 | Service | Address |
 |---|---|
@@ -136,7 +136,7 @@ It stops and removes the `bsgo` and `rebsgo-panel` services, then asks what shou
 | `launcher/` | the game's launcher |
 | `docs/` | the documentation |
 | `tools/` | account management and building the launcher's file list |
-| `schema/`, `native/`, `vendor/` | database schema, native accelerator module, bundled Python |
+| `schema/`, `vendor/` | database schema, bundled Python |
 
 ### Launcher
 
@@ -157,7 +157,7 @@ In the [`docs/`](docs/README.md) directory, in English and Hungarian, with the s
 
 ### Technology
 
-Python 3.13, bundled with the package; the server is built on the standard library. Data lives in SQLite, and a Rust/PyO3 native module speeds up the hot paths, prebuilt in the tree. The WebPanel is built on FastAPI. Game content comes from JSON templates rather than from code. Behaviour is covered by pytest suites during development: protocol, game rules, performance.
+Python 3.14 in its GIL-free (free-threaded) build, bundled with the package: the sector threads run in parallel, on several cores; the server is built on the standard library. Data lives in SQLite. The WebPanel is built on FastAPI. 
 
 ### Contact
 

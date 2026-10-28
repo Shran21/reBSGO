@@ -6,6 +6,7 @@ from contextlib import suppress
 import logging
 import queue
 import threading
+from collections import deque
 from dataclasses import dataclass, field
 from itertools import count
 
@@ -38,6 +39,61 @@ PRIORITY_INTERACTIVE = 1
 PRIORITY_SNAPSHOT = 2
 
 
+class _SavosSor:
+    """Prioritásonként egy deque-ból álló sor egyetlen fogyasztóval (a kapcsolat küldőszála).
+
+    A queue.PriorityQueue minden put/get hívásnál ugyanazt a zárat fogja: sok hajós csatában a szektor
+    szála (játékosonként, csomagonként betéve) folyton a küldőszállal versengett érte, és Pythonban minden
+    ilyen ütközés GIL-cserébe kerül — a profil szerint a szektorszál idejének ~60%-a a put zárjánál várt.
+    Itt a betétel egy deque.append (a GIL alatt atomi, zár nélkül), és a küldőszálat csak akkor ébreszti,
+    ha az épp alszik. A sorrend ugyanaz, mint a PriorityQueue-é: prioritás szerint, azon belül érkezési
+    sorrendben (a _QueueEntry sorszáma szerint)."""
+
+    def __init__(self, savok: int = 3):
+        self._savok = tuple(deque() for _ in range(savok))
+        self._ebreszto = threading.Event()
+        self._var = False
+
+    def put_nowait(self, bejegyzes: "_QueueEntry") -> None:
+        sav = min(max(int(bejegyzes.priority), 0), len(self._savok) - 1)
+        self._savok[sav].append(bejegyzes)
+        if self._var and not self._ebreszto.is_set():
+            self._ebreszto.set()
+
+    def _kivesz(self):
+        for sav in self._savok:
+            if sav:
+                try:
+                    return sav.popleft()
+                except IndexError:
+                    continue
+        raise queue.Empty
+
+    def get_nowait(self) -> "_QueueEntry":
+        return self._kivesz()
+
+    def get(self, timeout: float | None = None) -> "_QueueEntry":
+        try:
+            return self._kivesz()
+        except queue.Empty:
+            pass
+        self._var = True
+        try:
+            while True:
+                self._ebreszto.clear()
+                try:
+                    return self._kivesz()
+                except queue.Empty:
+                    pass
+                if not self._ebreszto.wait(timeout):
+                    return self._kivesz()          # időtúllépés: üresen queue.Empty
+        finally:
+            self._var = False
+
+    def qsize(self) -> int:
+        return sum(len(sav) for sav in self._savok)
+
+
 @dataclass(order=True)
 class _QueueEntry:
     priority: int
@@ -54,6 +110,14 @@ class _QueuedItem:
 @dataclass(frozen=True)
 class _CoalescedPacketSlot:
     key: object
+
+
+@dataclass(frozen=True)
+class _CoalescedPacketSlots:
+    """Egy köteg összevonható csomagjainak helyei egy bejegyzésben (a kiíráskor a legfrissebb csomag
+    megy ki mindegyik kulcsra). Eddig kulcsonként külön bejegyzés és zárfoglalás volt: tickenként
+    (mozgó objektumok × játékosok) darab."""
+    keys: tuple
 
 
 class _PacketBatch:
@@ -85,7 +149,7 @@ class _PacketBatch:
 class QueuedOutbox:
     def __init__(self, kimenet):
         self._output_stream = kimenet
-        self._bws = queue.PriorityQueue()
+        self._bws = _SavosSor(PRIORITY_SNAPSHOT + 1)
         self._sequence = count()
         self._send_failed = False
         self._shutdown_sender = False
@@ -160,19 +224,32 @@ class QueuedOutbox:
         if not SENDER_ENQUEUE_COALESCING_ENABLED or not SENDER_MOVEMENT_COALESCING_ENABLED:
             return self._send_single(_PacketBatch(packets))
 
+        if self._send_failed or self._shutdown_sender:
+            return False
         reliable_segment = []
+        osszevonhatok = []
         for packet in packets:
-            if self._coalesce_key(packet) is None:
+            kulcs = self._coalesce_key(packet)
+            if kulcs is None:
                 reliable_segment.append(packet)
-                continue
-            if reliable_segment:
-                if not self._send_single(_PacketBatch(reliable_segment)):
-                    return False
-                reliable_segment = []
-            if not self._send_coalescable_packet(packet):
-                return False
+            else:
+                osszevonhatok.append((kulcs, packet))
         if reliable_segment:
-            return self._send_single(_PacketBatch(reliable_segment))
+            if not self._send_single(_PacketBatch(reliable_segment)):
+                return False
+        if not osszevonhatok:
+            return True
+        uj_kulcsok = []
+        with self._coalescing_lock:
+            for kulcs, packet in osszevonhatok:
+                if kulcs not in self._pending_coalescable_by_key:
+                    uj_kulcsok.append(kulcs)
+                else:
+                    self._record_coalesced_skip()
+                self._pending_coalescable_by_key[kulcs] = packet
+        if uj_kulcsok:
+            self._put_queued_item(_CoalescedPacketSlots(tuple(dict.fromkeys(uj_kulcsok))), PRIORITY_SNAPSHOT)
+        self._warn_if_queue_large()
         return True
 
     def _send_single(self, bw) -> bool:
@@ -275,6 +352,8 @@ class QueuedOutbox:
             return QueuedOutbox._packet_count(item.item)
         if isinstance(item, _CoalescedPacketSlot):
             return 1
+        if isinstance(item, _CoalescedPacketSlots):
+            return len(item.keys)
         if isinstance(item, _PacketBatch):
             return len(item)
         return 1
@@ -316,6 +395,15 @@ class QueuedOutbox:
                 return 0
             packet.write_to(self._output_stream)
             return 1
+        if isinstance(item, _CoalescedPacketSlots):
+            with self._coalescing_lock:
+                csomagok = [self._pending_coalescable_by_key.pop(k, None) for k in item.keys]
+            irt = 0
+            for packet in csomagok:
+                if packet is not None:
+                    packet.write_to(self._output_stream)
+                    irt += 1
+            return irt
         if isinstance(item, _PacketBatch):
             return item.write_to(self._output_stream, self._should_write_packet)
         if not self._should_write_packet(item):
@@ -382,7 +470,7 @@ class QueuedOutbox:
     def _item_priority(item) -> int:
         if isinstance(item, _QueuedItem):
             return QueuedOutbox._item_priority(item.item)
-        if isinstance(item, _CoalescedPacketSlot):
+        if isinstance(item, (_CoalescedPacketSlot, _CoalescedPacketSlots)):
             return PRIORITY_SNAPSHOT
         if isinstance(item, _PacketBatch):
             return item.priority()

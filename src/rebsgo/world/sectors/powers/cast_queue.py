@@ -15,6 +15,8 @@ from rebsgo.gamedata.reading import ObjectStat
 from rebsgo.helpers.rolling_latency_stats import (
     ABILITY_DIAGNOSTICS_ENABLED,
     PLAYER_INPUT_WARN_MS,
+    SECTOR_AUTO_RETRY_MAX_MS,
+    SECTOR_AUTO_RETRY_STEP_MS,
     SECTOR_NPC_AUTO_MAX_ITEMS,
     SECTOR_NPC_AUTO_MAX_MS,
     SECTOR_TIMER_WARN_INTERVAL_MS,
@@ -29,6 +31,13 @@ log = logging.getLogger(__name__)
 
 
 class CastQueue(SectorStep):
+    # Az automatikus elsütés kudarcai, amelyeken a következő tick sem változtat (nincs vagy elérhetetlen a
+    # célpont, nincs lőszer, rövidzár): sorozatos ismétlődésükkor az újrapróba ritkul (_ujraprobalas_kesleltetes).
+    # A hűlés és az energiahiány nem ilyen: azoknál a fegyver a lehető leghamarabb süljön el, mint eddig.
+    _RITKITHATO_KUDARCOK = frozenset((
+        "target_count", "out_of_reach", "out_of_range", "target_removed", "asteroid_target",
+        "missing_consumable", "missing_missile_consumable", "short_circuit", "nincs_rekesz"))
+
     def __init__(self, ctx, engagement, damage_book, arrival_gate,
                  loot_ownership):
         self._ability_cast_requests = deque()
@@ -42,6 +51,8 @@ class CastQueue(SectorStep):
         self._auto_cast_due_heap = []
         self._auto_cast_due_sequence = count()
         self._auto_gond_nyom = {}
+        self._auto_kudarcok = {}                    # kulcs -> egymás utáni ritkítható kudarcok száma
+        self._utolso_kudarc_oka = None
         self._last_stats = self._empty_stats()
 
     _auto_gond_nyom: dict
@@ -67,12 +78,14 @@ class CastQueue(SectorStep):
         if elozo is not None and self._same_targets(elozo, cast_request):
             self._ensure_auto_scheduled(kulcs, cast_request)
             return
+        self._kudarcok_map().pop(kulcs, None)        # új célpont: azonnal, ritkítás nélkül próbálkozik
         self._schedule_auto_cast(kulcs, cast_request, self._next_due_ms_for_request(cast_request))
 
     def disarm_auto_cast(self, ability_id: int, object_id: int) -> None:
         kulcs = CastOrder.key_for(object_id, ability_id)
         self._auto_cast_abilities.pop(kulcs, None)
         self._auto_due_map().pop(kulcs, None)
+        self._kudarcok_map().pop(kulcs, None)
 
     def drop_auto_casts_of(self, object_id: int) -> None:
         for ertek in list(self._auto_cast_abilities.values()):
@@ -80,6 +93,7 @@ class CastQueue(SectorStep):
                 kulcs = self._key_of(ertek)
                 self._auto_cast_abilities.pop(kulcs, None)
                 self._auto_due_map().pop(kulcs, None)
+                self._kudarcok_map().pop(kulcs, None)
 
     def remove_auto_cast_abilities_targeting_object(self, casting_object_id: int, target_object_id: int) -> None:
         for ertek in list(self._auto_cast_abilities.values()):
@@ -87,6 +101,7 @@ class CastQueue(SectorStep):
                 kulcs = self._key_of(ertek)
                 self._auto_cast_abilities.pop(kulcs, None)
                 self._auto_due_map().pop(kulcs, None)
+                self._kudarcok_map().pop(kulcs, None)
 
         self._ability_cast_requests = deque(
             request for request in self._ability_cast_requests
@@ -172,7 +187,8 @@ class CastQueue(SectorStep):
                 self._last_stats["auto_skipped_not_due"] = len(self._auto_due_map())
                 break
             kulcs, cast_request = due_item
-            if self._process_request(cast_request):
+            sikerult = self._process_request(cast_request)
+            if sikerult:
                 self._last_stats["auto_success"] = self._last_stats.get("auto_success", 0) + 1
             else:
                 self._last_stats["auto_failed"] = self._last_stats.get("auto_failed", 0) + 1
@@ -182,7 +198,8 @@ class CastQueue(SectorStep):
                 self._schedule_auto_cast(
                     kulcs,
                     cast_request,
-                    self._next_due_ms_for_request(cast_request),
+                    max(self._next_due_ms_for_request(cast_request),
+                        tick_ms + self._ujraprobalas_kesleltetes(kulcs, sikerult)),
                     force_next_tick=True,
                 )
         if self._last_stats.get("auto_budget_exhausted"):
@@ -202,6 +219,30 @@ class CastQueue(SectorStep):
     def _auto_due_map(self) -> dict:
         self._ensure_auto_scheduler_state()
         return self._auto_cast_next_due_ms
+
+    def _kudarcok_map(self) -> dict:
+        if not hasattr(self, "_auto_kudarcok"):
+            self._auto_kudarcok = {}
+        return self._auto_kudarcok
+
+    def _ujraprobalas_kesleltetes(self, kulcs, sikerult: bool) -> int:
+        """Mennyivel később próbálkozzon újra egy automatikus képesség (ms, a hűlésen felül).
+
+        Eddig minden kudarc után a következő tickben (100 ms) újra próbálkozott, akkor is, ha nem volt
+        célpont, vagy az lőtávon kívül maradt: minden próba új képesség-objektumot épített és végigfutott az
+        ellenőrzéseken, tétlen NPC-fegyverekkel szektoronként tickenként több tucatszor (guardrails: 1 játékos
+        mellett 143 automatikus képesség). Sorozatos ritkítható kudarcnál (_RITKITHATO_KUDARCOK) a köz
+        lépésenként nő (az első után még a következő tick, utána 200, 300… ms, legfeljebb a felső határig);
+        sikeres elsütéskor, más okú kudarcnál és új célpontnál (arm_auto_cast) visszaáll."""
+        kudarcok = self._kudarcok_map()
+        if sikerult or getattr(self, "_utolso_kudarc_oka", None) not in self._RITKITHATO_KUDARCOK:
+            kudarcok.pop(kulcs, None)
+            return 0
+        sorozat = kudarcok.get(kulcs, 0) + 1
+        kudarcok[kulcs] = sorozat
+        if sorozat <= 1:
+            return 0
+        return int(min(SECTOR_AUTO_RETRY_MAX_MS, SECTOR_AUTO_RETRY_STEP_MS * sorozat))
 
     def _bootstrap_auto_due_heap(self) -> None:
         self._ensure_auto_scheduler_state()
@@ -306,6 +347,7 @@ class CastQueue(SectorStep):
         }
 
     def _process_request(self, cast_request) -> bool:
+        self._utolso_kudarc_oka = None
         if cast_request is None:
             return False
 
@@ -317,11 +359,14 @@ class CastQueue(SectorStep):
             return False
         rekeszek = casting_ship.space_subscribe_info().ship_slots
         if rekeszek is None:
+            self._utolso_kudarc_oka = "nincs_rekesz"
             return False
         casting_slot = rekeszek.slot(cast_request.ability_id)
         if casting_slot is None:
+            self._utolso_kudarc_oka = "nincs_rekesz"
             return False
         if casting_slot.ship_ability() is None:
+            self._utolso_kudarc_oka = "nincs_rekesz"
             return False
         to_call_on = []
         for obj_id in cast_request.target_ids:
@@ -332,6 +377,8 @@ class CastQueue(SectorStep):
         ability_action = self._deed_source.create(
             casting_ship, casting_slot, to_call_on, cast_request.fired_automatically)
         processed = bool(ability_action.process())
+        if not processed:
+            self._utolso_kudarc_oka = ability_action.failure_reason
         if cast_request.fired_automatically and log.isEnabledFor(logging.DEBUG):
             kulcs = (casting_ship.id_in_space(), cast_request.ability_id)
             if processed:

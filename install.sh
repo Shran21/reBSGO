@@ -128,6 +128,21 @@ else
     # shellcheck disable=SC2086
     ( cd "$HERE" && tar $KIHAGY -cf - . ) | tar -xf - -C "$TARGET" \
         || fail "$(t 'a másolás elakadt' 'the copy failed')"
+    # An interpreter tarball or a wheel an older version left in the target is
+    # not part of this one, and it would only take up room next to the new ones.
+    for REGI in "$TARGET"/vendor/python/cpython-*.tar.gz "$TARGET"/WebPanel/vendor/wheels/*.whl; do
+        [ -f "$REGI" ] || continue
+        case "$REGI" in
+            "$TARGET"/vendor/python/*) UJ="$HERE/vendor/python/$(basename "$REGI")" ;;
+            *) UJ="$HERE/WebPanel/vendor/wheels/$(basename "$REGI")" ;;
+        esac
+        [ -f "$UJ" ] || rm -f "$REGI"
+    done
+    # The Rust accelerator of earlier versions (native/, src/rebsgo/native/) is
+    # gone from the tree; left in the target it would only mislead.
+    for REGI in native src/rebsgo/native; do
+        [ -d "$TARGET/$REGI" ] && [ ! -d "$HERE/$REGI" ] && rm -rf "$TARGET/$REGI"
+    done
     kesz "$(t 'átmásolva; a telepítés az új helyről folytatódik' 'copied; the installation carries on from the new place')"
     TOVABB="--here"
     [ "$SYSTEMD" = 0 ] && TOVABB="$TOVABB --no-systemd"
@@ -144,16 +159,74 @@ GEP=$(uname -m)
 # and fails on every call.
 fut() { "$1" -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' >/dev/null 2>&1; }
 PYTHON="$ROOT/runtime/python/bin/python3"
-TARBALL=$(ls "$ROOT"/vendor/python/cpython-*.tar.gz 2>/dev/null | head -1)
-if fut "$PYTHON"; then
-    kesz "$(t 'már ki van bontva:' 'already unpacked:') $("$PYTHON" -V 2>&1)"
-elif [ -n "$TARBALL" ] && case "$(basename "$TARBALL")" in *"-$GEP-"*) true ;; *) false ;; esac; then
+# The interpreter's version with a "t" for the free-threaded (GIL-free) build,
+# in the same form as the bundled tarball's name (cpython-3.14.6t-...).
+valtozat() {
+    "$1" -c 'import sys, sysconfig
+print("%d.%d.%d" % sys.version_info[:3] + ("t" if sysconfig.get_config_var("Py_GIL_DISABLED") else ""))' 2>/dev/null
+}
+gil_jel() { case "$1" in *t) t ', GIL nélkül' ', GIL-free' ;; esac; }
+# The processes running from an interpreter directory right now: bsgo, or the
+# panel through its venv. Removing it under them breaks their next import, and
+# bsgo still saves the pilots on its way out.
+hasznaljak() {
+    for _exe in /proc/[0-9]*/exe; do
+        _cel=$(readlink "$_exe" 2>/dev/null) || continue
+        case "$_cel" in "$1"/*) _pid=${_exe#/proc/}; printf '%s ' "${_pid%/exe}" ;; esac
+    done
+}
+# Several tarballs side by side (an update unpacked over an older tree): the newest one.
+if printf '1\n' | sort -V >/dev/null 2>&1; then RENDEZ="sort -V"; else RENDEZ="sort"; fi
+TARBALL=$(ls "$ROOT"/vendor/python/cpython-*.tar.gz 2>/dev/null | $RENDEZ | tail -1)
+ILLIK=0
+[ -n "$TARBALL" ] && case "$(basename "$TARBALL")" in *"-$GEP-"*) ILLIK=1 ;; esac
+CSOMAGOLT=""
+[ "$ILLIK" = 1 ] && CSOMAGOLT=$(basename "$TARBALL" | sed -n 's/^cpython-\([0-9][0-9.]*t\{0,1\}\)-.*/\1/p')
+MOST=""
+fut "$PYTHON" && MOST=$(valtozat "$PYTHON")
+CSERE=1
+# An update brings its own interpreter: one that starts but is another version
+# than the bundled one (3.13 before the GIL-free 3.14t) is replaced, not kept.
+if [ -n "$MOST" ] && [ -n "$CSOMAGOLT" ] && [ "$MOST" != "$CSOMAGOLT" ]; then
+    mond "$(t "frissítés: a kibontott $MOST helyére a csomagolt $CSOMAGOLT kerül" "update: the bundled $CSOMAGOLT replaces the unpacked $MOST")"
+    if [ "$CHECK" = 0 ]; then
+        AKTIV=""
+        if [ "$SYSTEMD" = 1 ] && command -v systemctl >/dev/null 2>&1 && [ "$(id -u)" = 0 ]; then
+            for SZOLGALTATAS in bsgo rebsgo-panel; do
+                [ "$(systemctl is-active "$SZOLGALTATAS" 2>/dev/null)" = active ] && AKTIV="$AKTIV $SZOLGALTATAS"
+            done
+        fi
+        if [ -n "$AKTIV" ] && [ "$RESTART" = 0 ]; then
+            figyel "$(t "a cseréhez le kellene állítani:$AKTIV - a --no-restart miatt marad a $MOST" "the swap would need a stop of:$AKTIV - with --no-restart the $MOST stays")"
+            CSERE=0
+        elif [ -n "$AKTIV" ]; then
+            mond "$(t "leállítás a cseréhez:$AKTIV (a végén újraindulnak; a bent lévők kilépnek, a pilóták mentődnek)..." "stopping for the swap:$AKTIV (they start again at the end; players inside are signed out, the pilots are saved)...")"
+            # shellcheck disable=SC2086
+            systemctl stop $AKTIV
+        fi
+        FUTO=$(hasznaljak "$ROOT/runtime/python")
+        FUTO=${FUTO% }
+        if [ "$CSERE" = 1 ] && [ -n "$FUTO" ]; then
+            figyel "$(t "még fut belőle folyamat (pid: $FUTO) - állítsd le, és futtasd újra; addig marad a $MOST" "a process still runs from it (pid: $FUTO) - stop it and run this again; until then the $MOST stays")"
+            CSERE=0
+        fi
+    fi
+fi
+if [ -n "$MOST" ] && { [ "$CSERE" = 0 ] || [ -z "$CSOMAGOLT" ] || [ "$MOST" = "$CSOMAGOLT" ]; }; then
+    kesz "$(t 'már ki van bontva:' 'already unpacked:') $("$PYTHON" -V 2>&1)$(gil_jel "$MOST")"
+elif [ "$ILLIK" = 1 ]; then
     mond "$(t 'kibontás:' 'unpacking:') $(basename "$TARBALL")"
     if [ "$CHECK" = 0 ]; then
+        # Unpacked beside the old one first: an interrupted run leaves that one whole.
+        rm -rf "$ROOT/runtime/.kibontas"
+        kibonto "$TARBALL" "$ROOT/runtime/.kibontas"
+        fut "$ROOT/runtime/.kibontas/python/bin/python3" \
+            || fail "$(t 'a kibontott értelmező nem indul' 'the unpacked interpreter does not start')"
         rm -rf "$ROOT/runtime/python"
-        kibonto "$TARBALL" "$ROOT/runtime"
+        mv "$ROOT/runtime/.kibontas/python" "$ROOT/runtime/python"
+        rm -rf "$ROOT/runtime/.kibontas"
         fut "$PYTHON" || fail "$(t 'a kibontott értelmező nem indul' 'the unpacked interpreter does not start')"
-        kesz "$(t 'kész:' 'done:') $("$PYTHON" -V 2>&1)"
+        kesz "$(t 'kész:' 'done:') $("$PYTHON" -V 2>&1)$(gil_jel "$(valtozat "$PYTHON")")"
     else
         mond "$(t '(kibontaná ide: runtime/)' '(it would unpack into runtime/)')"
     fi
@@ -173,24 +246,9 @@ else
         || fail "$(t "3.11 vagy újabb Python kell, ez: $("$PYTHON" -V 2>&1)" "Python 3.11 or newer is needed, this one is: $("$PYTHON" -V 2>&1)")"
     kesz "$(t 'rendszer-értelmező:' 'system interpreter:') $PYTHON, $("$PYTHON" -V 2>&1)"
 fi
-NATIV_ITT=0
-ls "$ROOT"/native/lib/rebsgo_native*"-$GEP-"*.so >/dev/null 2>&1 && NATIV_ITT=1
-if [ "$NATIV_ITT" = 1 ] && fut "$PYTHON"; then
-    case "$("$PYTHON" -V 2>&1)" in
-        *" 3.13."*) : ;;
-        *) figyel "$(t 'a natív modul cp313-ra épült; más verzióval a gyorsítás kimarad' 'the native module was built for cp313; another version leaves the acceleration out')" ;;
-    esac
-fi
 
 fazis "$(t 'Szerverfa és mappák' 'The server tree and its directories')"
 [ -d "$ROOT/src/rebsgo" ] || fail "$(t 'src/rebsgo hiányzik - ez nem egy szerverfa?' 'src/rebsgo is missing - is this a server tree?')"
-if [ "$NATIV_ITT" = 1 ]; then
-    kesz "$(t 'natív gyorsítómodul: megvan (native/lib)' 'native accelerator module: present (native/lib)')"
-elif ls "$ROOT"/native/lib/rebsgo_native*.so >/dev/null 2>&1; then
-    figyel "$(t "a natív modul másik processzorra készült ($GEP-re nincs) - tiszta-python tartalékon fut (lassabb, de teljes)" "the native module was built for another processor (none for $GEP) - running on the pure-python fallback (slower, but complete)")"
-else
-    figyel "$(t 'natív modul nincs - tiszta-python tartalékon fut (lassabb, de teljes)' 'no native module - running on the pure-python fallback (slower, but complete)')"
-fi
 if [ "$CHECK" = 0 ]; then
     mkdir -p "$ROOT/logs" "$ROOT/sqlite" "$ROOT/WebPanel/logs"
 fi
@@ -245,21 +303,26 @@ else
     mond "$(t 'kikapcsolás: REBSGO_SECTOR_GATING_MODE=off a .env-ben, majd a bsgo újraindítása' 'to switch it off: REBSGO_SECTOR_GATING_MODE=off in .env, then restart bsgo')"
 fi
 
-fazis "$(t 'Gyorspróba — betölt-e a szerverkód, él-e a natív gyorsítás' 'Quick check — does the server code load, is the native acceleration live')"
+fazis "$(t 'Gyorspróba — betölt-e a szerverkód, fut-e GIL nélkül' 'Quick check — does the server code load, does it run without the GIL')"
 if [ "$CHECK" = 1 ]; then
     mond "$(t '(lefuttatná)' '(it would run this)')"
 else
+    # Exit code 4: the GIL is off. It is read after the imports: an extension
+    # module that does not declare itself free-threading safe switches it back
+    # on while loading.
     ( cd "$ROOT" && PYTHONPATH="$ROOT/src" "$PYTHON" -c '
+import sys
 import rebsgo.main  # import binds no ports; a broken tree fails right here
-from rebsgo.native import hotpath
-raise SystemExit(0 if hotpath._native is not None else 3)
+raise SystemExit(0 if getattr(sys, "_is_gil_enabled", lambda: True)() else 4)
 ' )
     RC=$?
     case "$RC" in
-        0) kesz "$(t 'a szerver kódja betölt; a natív gyorsítómodul aktív' 'the server code loads; the native accelerator module is active')" ;;
-        3) kesz "$(t 'a szerver kódja betölt' 'the server code loads')"
-           figyel "$(t 'a natív modul nem töltődött be - tiszta-python tartalékon fut' 'the native module did not load - running on the pure-python fallback')" ;;
+        0|4) kesz "$(t 'a szerver kódja betölt' 'the server code loads')" ;;
         *) fail "$(t 'a szerver kódja nem tölt be - hiányos vagy sérült fa?' 'the server code does not load - an incomplete or damaged tree?')" ;;
+    esac
+    case "$RC" in
+        4) kesz "$(t 'GIL: kikapcsolva - a szektorok szálai párhuzamosan, több magon futnak' 'GIL: off - the sector threads run in parallel, on several cores')" ;;
+        *) mond "$(t 'GIL: bekapcsolva - a szerver összesen kb. egy magot használ' 'GIL: on - the server uses about one core in all')" ;;
     esac
 fi
 
@@ -345,18 +408,18 @@ else
     mond "$(t '(felépítené a WebPanel/vendor/wheels tartalmából)' '(it would build one from WebPanel/vendor/wheels)')"
 fi
 # Left to the panel, panel.env is written on its first start - after run.sh has
-# already read it, found nothing, and bound to every address until a restart.
+# already read it and found nothing.
 PANEL_ENV="$ROOT/WebPanel/panel.env"
 if [ -f "$PANEL_ENV" ]; then
     kesz "$(t 'WebPanel/panel.env már van - nem nyúlok hozzá' 'WebPanel/panel.env is already there - left untouched')"
 elif [ "$CHECK" = 1 ]; then
-    mond "$(t '(elkészítené a WebPanel/panel.env-et: a panel csak erről a gépről nyílna)' '(it would write WebPanel/panel.env: the panel would open from this machine only)')"
+    mond "$(t '(elkészítené a WebPanel/panel.env-et: a panel minden hálózati címen elérhető lenne)' '(it would write WebPanel/panel.env: the panel would be reachable on every network address)')"
 elif ( cd "$ROOT/WebPanel" && REBSGO_LANG="$NYELV" "$VENV/bin/python" -c 'from panel import settings; settings.raw()' ) \
         && [ -f "$PANEL_ENV" ]; then
     chmod 600 "$PANEL_ENV"
-    kesz "$(t 'WebPanel/panel.env elkészült: a panel csak erről a gépről nyílik (PANEL_HOST=127.0.0.1)' 'WebPanel/panel.env written: the panel opens from this machine only (PANEL_HOST=127.0.0.1)')"
+    kesz "$(t 'WebPanel/panel.env elkészült: a panel minden hálózati címen elérhető (PANEL_HOST=0.0.0.0)' 'WebPanel/panel.env written: the panel is reachable on every network address (PANEL_HOST=0.0.0.0)')"
 else
-    figyel "$(t 'a WebPanel/panel.env nem készült el - az első indításkor minden címen figyel majd' 'WebPanel/panel.env was not written - on its first start the panel will listen on every address')"
+    figyel "$(t 'a WebPanel/panel.env nem készült el - az első indításkor a panel maga írja meg' 'WebPanel/panel.env was not written - the panel writes it on its first start')"
 fi
 
 fazis "$(t 'Első admin fiók — a WebPanelhez és a fejlesztői jogokhoz' 'The first admin account — for the WebPanel and the developer rights')"
@@ -408,10 +471,22 @@ elif [ "$(id -u)" != 0 ]; then
 elif [ "$CHECK" = 1 ]; then
     mond "$(t '(telepítené, engedélyezné és elindítaná: bsgo, rebsgo-panel)' '(it would install, enable and start: bsgo, rebsgo-panel)')"
 else
+    # REBSGO_SYSTEMD_DIR: only for trying the installer out without touching the real units.
+    UNIT_DIR=${REBSGO_SYSTEMD_DIR:-/etc/systemd/system}
     sed -e "s|__ROOT__|$ROOT|g" -e "s|__PYTHON__|$PYTHON|g" -e "s|__LANG__|$NYELV|g" \
-        "$ROOT/deploy/bsgo.service.template" > /etc/systemd/system/bsgo.service
+        "$ROOT/deploy/bsgo.service.template" > "$UNIT_DIR/bsgo.service"
     sed -e "s|__PANEL_DIR__|$ROOT/WebPanel|g" -e "s|__LANG__|$NYELV|g" \
-        "$ROOT/WebPanel/deploy/rebsgo-panel.service" > /etc/systemd/system/rebsgo-panel.service
+        "$ROOT/WebPanel/deploy/rebsgo-panel.service" > "$UNIT_DIR/rebsgo-panel.service"
+    # The October 2026 GIL-free package (telepit.sh) pointed bsgo at
+    # runtime/python314t with this drop-in. Once runtime/python is the GIL-free
+    # interpreter itself, the override goes, and bsgo starts like a fresh install.
+    REGI_DROPIN="$UNIT_DIR/bsgo.service.d/20-python314t.conf"
+    if [ -f "$REGI_DROPIN" ] && grep -q 'runtime/python314t' "$REGI_DROPIN" \
+            && case "$(valtozat "$PYTHON")" in *t) true ;; *) false ;; esac; then
+        rm -f "$REGI_DROPIN"
+        rmdir "$UNIT_DIR/bsgo.service.d" 2>/dev/null
+        kesz "$(t 'a korábbi GIL nélküli kiegészítő (20-python314t.conf) törölve: a bsgo a runtime/python-ból indul' 'the earlier GIL-free drop-in (20-python314t.conf) removed: bsgo starts from runtime/python')"
+    fi
     systemctl daemon-reload
     systemctl enable bsgo rebsgo-panel >/dev/null 2>&1
     kesz "$(t 'unitok a helyükön, mindkettő engedélyezve (újraindulás után is felállnak)' 'both units are in place and enabled (they come up after a reboot too)')"
@@ -442,14 +517,25 @@ else
         mond "systemctl restart$MAR_FUTOTT"
         mond "$(t '(a bsgo leállása kilépteti a játékosokat, a pilótákat elmenti)' '(stopping bsgo signs the players out, and saves the pilots)')"
     fi
+    # What the old drop-in ran is unused once bsgo restarted from runtime/python.
+    if [ -d "$ROOT/runtime/python314t" ] && [ ! -f "$REGI_DROPIN" ]; then
+        FUTO=$(hasznaljak "$ROOT/runtime/python314t")
+        FUTO=${FUTO% }
+        if [ -n "$FUTO" ]; then
+            figyel "$(t "a runtime/python314t-ből még fut folyamat (pid: $FUTO) - újraindítás után törölhető" "a process still runs from runtime/python314t (pid: $FUTO) - it can go after a restart")"
+        else
+            rm -rf "$ROOT/runtime/python314t"
+            kesz "$(t 'a korábbi runtime/python314t törölve (a runtime/python ugyanez az értelmező)' 'the earlier runtime/python314t removed (runtime/python is that same interpreter)')"
+        fi
+    fi
 fi
 
 printf '\n%s%s✔ %s%s\n' "$VASTAG" "$ZOLD" "$(t 'Kész.' 'Done.')" "$VEGE"
 mond "$(t 'szerver:         ' 'server:          ')$ROOT"
 mond "$(t 'beléptető ajtó:  http://<ez-a-gép>:27051/   (a launcher ide csatlakozik)' 'admission door:  http://<this-machine>:27051/   (the launcher connects here)')"
 mond "$(t 'launcher:        ' 'launcher:        ')$ROOT/launcher/rebsgo-launcher.exe"
-mond "$(t 'webpanel:        http://<ez-a-gép>:27055/   (hálózati eléréshez a WebPanel/panel.env' 'webpanel:        http://<this-machine>:27055/   (for network access set')"
-mond "$(t '                 fájlban PANEL_HOST=0.0.0.0, vagy TLS-proxy mögé)' '                 PANEL_HOST=0.0.0.0 in WebPanel/panel.env, or put it behind a TLS proxy)')"
+mond "$(t 'webpanel:        http://<ez-a-gép>:27055/   (minden hálózati címen; csak helyi eléréshez' 'webpanel:        http://<this-machine>:27055/   (on every network address; for local-only access')"
+mond "$(t '                 PANEL_HOST=127.0.0.1 a WebPanel/panel.env-ben; nyilvánosan TLS-proxy mögé)' '                 PANEL_HOST=127.0.0.1 in WebPanel/panel.env; publicly, behind a TLS proxy)')"
 mond "$(t 'beállítások:     ' 'settings:        ')$ROOT/.env"
 mond "$(t 'admin fiók:      ' 'admin account:   ')$ADMIN"
 mond "$(t 'eltávolítás:     ' 'uninstall:       ')sh $ROOT/uninstall.sh"

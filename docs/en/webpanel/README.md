@@ -7,8 +7,9 @@ need a command line can be done from a browser — accounts, sectors, the
 database, logs, settings, backups, the console.
 
 **Address:** `http://<the machine's address>:27055`. After a fresh install the
-panel opens on its own machine; `PANEL_HOST=0.0.0.0` opens it to the network,
-and public reach belongs behind a TLS proxy (`settings.md`).
+panel is reachable from the network (`PANEL_HOST=0.0.0.0`);
+`PANEL_HOST=127.0.0.1` keeps it to its own machine, and public reach belongs
+behind a TLS proxy (`settings.md`).
 
 ## Signing in
 

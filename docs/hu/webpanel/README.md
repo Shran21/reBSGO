@@ -6,9 +6,10 @@ A WebPanel a szerver webes adminfelülete: böngészőből intézhető minden, a
 eddig parancssor kellett — fiókok, szektorok, adatbázis, naplók, beállítások,
 mentések, konzol.
 
-**Cím:** `http://<a gép címe>:27055`. Friss telepítés után a panel a saját
-gépéről nyílik; a hálózat felé a `PANEL_HOST=0.0.0.0` beállítás nyitja meg,
-nyilvános eléréshez TLS-proxy ajánlott (`beallitasok.md`).
+**Cím:** `http://<a gép címe>:27055`. Friss telepítés után a panel a
+hálózatról is elérhető (`PANEL_HOST=0.0.0.0`); a saját gépére a
+`PANEL_HOST=127.0.0.1` szűkíti, nyilvános eléréshez TLS-proxy ajánlott
+(`beallitasok.md`).
 
 ## Belépés
 

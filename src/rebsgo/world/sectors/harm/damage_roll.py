@@ -12,7 +12,7 @@ from rebsgo.world.sectors.spatial.radius_candidates import (
 from rebsgo.vocabulary.world import ObjectKind
 from rebsgo.geometry.maths.maths import Maths
 from rebsgo.world.combat_rules import splash_terms
-from rebsgo.native.hotpath import filter_range_distance_sq, log_native_event
+from rebsgo.helpers.hotpath import filter_range_distance_sq
 from rebsgo.gamedata.reading import ObjectStat
 from rebsgo.helpers.dice import Dice
 from rebsgo.helpers.floats import f32, fdiv
@@ -114,13 +114,6 @@ class DamageRoll:
                 True,
                 True,
             ))
-            log_native_event(
-                log,
-                "damage_torpedo_range_distance_used",
-                "Damage torpedo range-distance candidates=%s matches=%s",
-                len(splash_records),
-                len(splash_distance_sq_by_id),
-            )
 
         for ship, is_primary in prepared_targets:
             if is_primary:
@@ -177,13 +170,6 @@ class DamageRoll:
                     False,
                 )
             }
-            log_native_event(
-                log,
-                "damage_mine_range_distance_used",
-                "Damage mine range-distance candidates=%s matches=%s",
-                len(range_records),
-                len(in_range_ids),
-            )
 
         for ship in enemy_ships:
             if ship.id_in_space() not in in_range_ids:

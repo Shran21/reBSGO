@@ -92,46 +92,82 @@ class PendingChanges(Outgoing):
                     format_ship_aspects(ship_aspects))
             self._add_update(update)
 
-    def on_stat_moved(self, space_subscribe_info, stat_adat) -> None:
-        with self._lock:
-            if stat_adat == StatEntry.Hp:
-                self._add_update(HullChange(space_subscribe_info.hp))
-            elif stat_adat == StatEntry.Pp:
-                self._add_update(PowerChange(space_subscribe_info.pp))
-            elif stat_adat == StatEntry.Combat:
-                self._add_update(CombatChange(space_subscribe_info.is_in_combat))
-            elif stat_adat == StatEntry.Target:
-                if (celpont := space_subscribe_info.target_object_id) is not None:
-                    self._add_update(TargetChange(celpont.get()))
-            elif stat_adat == StatEntry.Stats:
-                for stat, ertek in space_subscribe_info.stats_of.all_stats.items():
-                    self._add_update(StatChange(stat, ertek))
+    @staticmethod
+    def changes_for(space_subscribe_info, stat_adat) -> list:
+        """Egy statváltozás változásobjektumai. Ezek értékobjektumok, így egy objektum minden feliratkozója
+        ugyanazokat kaphatja (SpaceFeed._fan_out): nem kell feliratkozónként újakat gyártani, és a
+        PropertyFlush felismeri az azonos tartalmú puffereket (közös szerializálás)."""
+        if stat_adat == StatEntry.Hp:
+            return [HullChange(space_subscribe_info.hp)]
+        if stat_adat == StatEntry.Pp:
+            return [PowerChange(space_subscribe_info.pp)]
+        if stat_adat == StatEntry.Combat:
+            return [CombatChange(space_subscribe_info.is_in_combat)]
+        if stat_adat == StatEntry.Target:
+            if (celpont := space_subscribe_info.target_object_id) is not None:
+                return [TargetChange(celpont.get())]
+            return []
+        if stat_adat == StatEntry.Stats:
+            return [StatChange(stat, ertek) for stat, ertek in space_subscribe_info.stats_of.all_stats.items()]
+        return []
 
-    def on_slot_update(self, space_subscribe_info, slot_id: int) -> None:
+    def add_updates(self, valtozasok) -> None:
+        with self._lock:
+            for valtozas in valtozasok:
+                self._add_update(valtozas)
+
+    def content_key(self):
+        """Az épp függő változások azonossága (objektum-identitás szerint): két pufferé akkor egyezik, ha
+        pontosan ugyanazokat a (közös) változásobjektumokat tartalmazzák — így ugyanaz a csomag megy ki."""
+        with self._lock:
+            return (frozenset(map(id, self.property_updates)),
+                    frozenset((fajta, id(v)) for fajta, v in self.unique_property_updates.items()))
+
+    def discard(self, kulcs) -> None:
+        """A kulcsban szereplő (már egy közös csomagban kiküldött) változások törlése; az azóta érkezettek
+        maradnak, és a következő ürítéskor mennek ki."""
+        azonosak, egyediek = kulcs
+        with self._lock:
+            if azonosak:
+                for valtozas in [v for v in self.property_updates if id(v) in azonosak]:
+                    self.property_updates.discard(valtozas)
+            if egyediek:
+                for fajta in [f for f, v in self.unique_property_updates.items() if (f, id(v)) in egyediek]:
+                    self.unique_property_updates.pop(fajta, None)
+
+    def on_stat_moved(self, space_subscribe_info, stat_adat) -> None:
+        self.add_updates(PendingChanges.changes_for(space_subscribe_info, stat_adat))
+
+    @staticmethod
+    def slot_changes_for(space_subscribe_info, slot_id: int) -> list:
+        """Egy rekesz képesség-statjainak változásobjektumai (közösen szétosztható, lásd changes_for)."""
         rekeszek = space_subscribe_info.ship_slots
         if rekeszek is None:
-            return
+            return []
         slot = rekeszek.slot(slot_id)
+        if slot.ship_system is None or slot.ship_ability() is None:
+            return []
+        valtozasok = [SlotChange(slot_id, stat, ertek)
+                      for stat, ertek in slot.ship_ability().item_buff_add.all_stats.items()]
+        valtozasok.append(SlotChange(
+            slot_id, ObjectStat.MinRange,
+            slot.ship_ability().item_buff_add.stat_or_default(ObjectStat.MinRange)))
+        return valtozasok
+
+    def on_slot_update(self, space_subscribe_info, slot_id: int) -> None:
+        self.add_updates(PendingChanges.slot_changes_for(space_subscribe_info, slot_id))
+
+    def add_raw_updates(self, valtozasok) -> None:
+        """Szűrés nélküli hozzáadás (a buffok így kerültek be eddig is: on_modifier_add/remove)."""
         with self._lock:
-            if slot.ship_system is None:
-                return
-            if slot.ship_ability() is None:
-                return
-            for stat, ertek in slot.ship_ability().item_buff_add.all_stats.items():
-                self._add_update(SlotChange(slot_id, stat, ertek))
-            self._add_update(SlotChange(
-                slot_id, ObjectStat.MinRange,
-                slot.ship_ability().item_buff_add.stat_or_default(ObjectStat.MinRange)))
+            for valtozas in valtozasok:
+                self.property_updates.add(valtozas)
 
     def on_modifier_add(self, space_subscribe_info, uj_hatasok) -> None:
-        with self._lock:
-            for new_buff in uj_hatasok:
-                self.property_updates.add(TweakAdded(new_buff))
+        self.add_raw_updates([TweakAdded(new_buff) for new_buff in uj_hatasok])
 
     def on_modifier_remove(self, space_subscribe_info, removed_buff_ids) -> None:
-        with self._lock:
-            for removed_buff_id in removed_buff_ids:
-                self.property_updates.add(TweakRemoved(removed_buff_id))
+        self.add_raw_updates([TweakRemoved(removed_buff_id) for removed_buff_id in removed_buff_ids])
 
     def __str__(self) -> str:
         return ("<PendingChanges " + f"owner={self._owner}, property_updates={self.property_updates},"

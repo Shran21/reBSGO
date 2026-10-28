@@ -19,7 +19,7 @@ def _gep_nyelve() -> str:
     return "hu" if beallitas.lower().startswith("hu") else "en"
 
 _DEFAULTS = {
-    "PANEL_HOST": "127.0.0.1",
+    "PANEL_HOST": "0.0.0.0",
     "PANEL_PORT": "27055",
     "PANEL_DB": "../sqlite/bgo_server.db",
     "PANEL_LOGIN_ROLES": "Developer,Console",

@@ -13,7 +13,5 @@ SEMA = PROJEKT / "schema"
 
 JATEKADAT = PROJEKT / "GameData"
 
-NATIV = PROJEKT / "native" / "lib"
 
-
-__all__ = ["CSOMAG", "JATEKADAT", "NATIV", "PROJEKT", "SEMA"]
+__all__ = ["CSOMAG", "JATEKADAT", "PROJEKT", "SEMA"]

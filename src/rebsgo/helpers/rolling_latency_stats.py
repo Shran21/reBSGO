@@ -34,6 +34,10 @@ SECTOR_COMMAND_MAX_PLAYER_INPUT = _CONFIG.int("rebsgo.sector.command-queue.max-p
 SECTOR_COMMAND_MAX_NORMAL = _CONFIG.int("rebsgo.sector.command-queue.max-normal-per-tick", 512)
 SECTOR_NPC_AUTO_MAX_MS = _CONFIG.float("rebsgo.sector.npc-auto.max-ms-per-tick", 12.0)
 SECTOR_NPC_AUTO_MAX_ITEMS = _CONFIG.int("rebsgo.sector.npc-auto.max-items-per-tick", 256)
+# Az automatikus képesség (fegyver) újrapróbálása, ha célpont miatt nem sült el (cast_queue.py): sorozatos
+# kudarcnál lépésenként ennyivel ritkul, legfeljebb a felső határig; sikeres elsütéskor visszaáll.
+SECTOR_AUTO_RETRY_STEP_MS = _CONFIG.float("rebsgo.sector.auto-cast.retry-step-ms", 100.0)
+SECTOR_AUTO_RETRY_MAX_MS = _CONFIG.float("rebsgo.sector.auto-cast.retry-max-ms", 500.0)
 SECTOR_NPC_TARGET_CACHE_TICKS = _CONFIG.int("rebsgo.sector.npc-target-cache-ticks", 10)
 SECTOR_NPC_TARGET_PHASE_COUNT = _CONFIG.int("rebsgo.sector.npc-target-phase-count", 4)
 SCHEDULED_TASK_WARN_MS = _CONFIG.float("rebsgo.guardrails.scheduled-task-warn-ms", 1000.0)
@@ -50,29 +54,6 @@ SENDER_PRIORITY_LANES_ENABLED = _CONFIG.bool("rebsgo.sender.priority-lanes.enabl
 SENDER_FLUSH_DRAIN_ENABLED = _CONFIG.bool("rebsgo.sender.flush-drain.enabled", True)
 SENDER_FLUSH_DRAIN_MAX_ITEMS = _CONFIG.int("rebsgo.sender.flush-drain.max-items", 256)
 SENDER_BROADCAST_PREFREEZE_ENABLED = _CONFIG.bool("rebsgo.sender.broadcast-prefreeze.enabled", True)
-NATIVE_RUST_ENABLED = _CONFIG.bool("rebsgo.native.rust.enabled", True)
-NATIVE_RUST_RADIUS_FILTER_ENABLED = _CONFIG.bool("rebsgo.native.rust.radius-filter.enabled", True)
-NATIVE_RUST_RADIUS_FILTER_MIN_RECORDS = _CONFIG.int("rebsgo.native.rust.radius-filter.min-records", 32)
-NATIVE_RUST_NEAREST_RADIUS_ENABLED = _CONFIG.bool("rebsgo.native.rust.nearest-radius.enabled", True)
-NATIVE_RUST_NEAREST_RADIUS_MIN_RECORDS = _CONFIG.int(
-    "rebsgo.native.rust.nearest-radius.min-records", NATIVE_RUST_RADIUS_FILTER_MIN_RECORDS)
-NATIVE_RUST_OUT_OF_BOUNDS_ENABLED = _CONFIG.bool("rebsgo.native.rust.out-of-bounds.enabled", True)
-NATIVE_RUST_OUT_OF_BOUNDS_MIN_RECORDS = _CONFIG.int("rebsgo.native.rust.out-of-bounds.min-records", 32)
-NATIVE_RUST_SPATIAL_AABB_FILTER_ENABLED = _CONFIG.bool("rebsgo.native.rust.spatial-aabb-filter.enabled", True)
-NATIVE_RUST_SPATIAL_PAIR_GENERATION_ENABLED = _CONFIG.bool(
-    "rebsgo.native.rust.spatial-pair-generation.enabled", True)
-NATIVE_RUST_SPATIAL_MIN_RECORDS = _CONFIG.int("rebsgo.native.rust.spatial.min-records", 32)
-NATIVE_RUST_SPHERE_PAIR_FILTER_ENABLED = _CONFIG.bool("rebsgo.native.rust.sphere-pair-filter.enabled", True)
-NATIVE_RUST_SPHERE_PAIR_FILTER_MIN_RECORDS = _CONFIG.int(
-    "rebsgo.native.rust.sphere-pair-filter.min-records", 16)
-NATIVE_RUST_RANGE_DISTANCE_ENABLED = _CONFIG.bool("rebsgo.native.rust.range-distance.enabled", True)
-NATIVE_RUST_RANGE_DISTANCE_MIN_RECORDS = _CONFIG.int("rebsgo.native.rust.range-distance.min-records", 32)
-NATIVE_RUST_FUTURE_POSITIONS_ENABLED = _CONFIG.bool("rebsgo.native.rust.future-positions.enabled", True)
-NATIVE_RUST_FUTURE_POSITIONS_MIN_RECORDS = _CONFIG.int("rebsgo.native.rust.future-positions.min-records", 64)
-NATIVE_RUST_PACKET_SERIALIZATION_ENABLED = _CONFIG.bool("rebsgo.native.rust.packet-serialization.enabled", True)
-NATIVE_RUST_DIAGNOSTICS_ENABLED = _CONFIG.bool("rebsgo.native.rust.diagnostics.enabled", False)
-NATIVE_RUST_DIAGNOSTICS_SAMPLE_INTERVAL = _CONFIG.int(
-    "rebsgo.native.rust.diagnostics.sample-interval", 1000)
 SENDER_QUEUE_AGE_WARN_MS = _CONFIG.float("rebsgo.guardrails.sender-queue-age-warn-ms", 100.0)
 SENDER_DRAIN_WARN_ITEMS = _CONFIG.int("rebsgo.guardrails.sender-drain-warn-items", 512)
 PLAYER_INPUT_WARN_MS = _CONFIG.float("rebsgo.guardrails.pilot-input-warn-ms", 100.0)

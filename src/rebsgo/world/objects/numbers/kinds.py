@@ -210,6 +210,18 @@ class SpaceFeed:
         if self._subscribers:
             self._has_pending_property_buffers = True
 
+    def _fan_out(self, stat_adat, feliratkozok=None) -> None:
+        """A változásobjektumokat egyszer gyártja le, és minden feliratkozó ugyanazokat kapja."""
+        feliratkozok = self._subscribers if feliratkozok is None else feliratkozok
+        if not feliratkozok:
+            return
+        from rebsgo.world.objects.numbers.pending.pending_changes import PendingChanges
+        valtozasok = PendingChanges.changes_for(self, stat_adat)
+        if not valtozasok:
+            return
+        for puffer in feliratkozok.values():
+            puffer.add_updates(valtozasok)
+
     @property
     def has_pending_space_property_buffer(self) -> bool:
         return self._has_pending_property_buffers
@@ -282,8 +294,7 @@ class SpaceFeed:
         with self.lock:
             self.hull_power_points.hull_points = uj_hp
             self.limit_hull()
-            for ertek in self._subscribers.values():
-                ertek.on_stat_moved(self, StatEntry.Hp)
+            self._fan_out(StatEntry.Hp)
             self._mark_property_buffers_dirty()
 
     def set_power(self, uj_pp: float) -> None:
@@ -295,8 +306,7 @@ class SpaceFeed:
 
     def refresh_generic(self, stat_adat) -> None:
         with self.lock:
-            for ertek in self._subscribers.values():
-                ertek.on_stat_moved(self, stat_adat)
+            self._fan_out(stat_adat)
             self._mark_property_buffers_dirty()
 
     @property
@@ -355,8 +365,7 @@ class SpaceFeed:
             return
         valtozott = combat_info.combat_status_moved(harc_ora, most_ms, raketaval)
         if valtozott:
-            for subscriber in self._subscribers.values():
-                subscriber.on_stat_moved(self, StatEntry.Combat)
+            self._fan_out(StatEntry.Combat)
             self._mark_property_buffers_dirty()
 
     def stat(self, stat):
@@ -389,8 +398,11 @@ class SpaceFeed:
         if modifiers is None:
             return
         new_modifiers = modifiers.attach_modifier(modosito)
-        for sub in self._subscribers.values():
-            sub.on_modifier_add(self, new_modifiers)
+        if self._subscribers:
+            from rebsgo.world.objects.numbers.changes import TweakAdded
+            valtozasok = [TweakAdded(new_buff) for new_buff in new_modifiers]
+            for sub in self._subscribers.values():
+                sub.add_raw_updates(valtozasok)
         self._mark_property_buffers_dirty()
         self.fold_in_stats()
 
@@ -399,8 +411,11 @@ class SpaceFeed:
         if modifiers is None:
             return
         modifiers.remove_modifier(levonandok)
-        for sub in self._subscribers.values():
-            sub.on_modifier_remove(self, levonandok)
+        if self._subscribers:
+            from rebsgo.world.objects.numbers.changes import TweakRemoved
+            valtozasok = [TweakRemoved(removed_buff_id) for removed_buff_id in levonandok]
+            for sub in self._subscribers.values():
+                sub.add_raw_updates(valtozasok)
         self._mark_property_buffers_dirty()
         self.fold_in_stats()
 
@@ -413,8 +428,7 @@ class SpaceFeed:
         with self.lock:
             if (celpont := self.target_object_id) is not None:
                 celpont.set(new_target_object_id)
-                for sub in self._subscribers.values():
-                    sub.on_stat_moved(self, StatEntry.Target)
+                self._fan_out(StatEntry.Target)
                 self._mark_property_buffers_dirty()
 
     @property
@@ -437,7 +451,9 @@ class SpaceFeed:
     def ship_slots(self, slots) -> None:
         pass
 
-    def flush_property_buffer(self) -> int:
+    def flush_property_buffer(self, gyujto: list | None = None) -> int:
+        """A függő statváltozások kiküldése. gyujto: ha meg van adva (PropertyFlush), a kész csomagok
+        (feed, feliratkozó, csomag) hármasként ide kerülnek, és a hívó feliratkozónként egy kötegben küldi."""
         if not self._has_pending_property_buffers:
             return 0
         pending = []
@@ -450,10 +466,38 @@ class SpaceFeed:
                     pending.append((subscriber, puffer))
 
         to_remove = set()
+        # Az azonos protokollú, azonos (közös objektumokból álló) tartalmú pufferek egyetlen csomagot kapnak:
+        # egyszer szerializálunk, és ugyanazt küldjük mindegyiknek. Az eredeti kliens minden látott
+        # játékoshajó statjaira feliratkozik (k:PlayerShip.cs), így N játékosnál N*(N-1) feliratkozás van;
+        # a feliratkozónkénti szerializálás 40 játékosnál tickenként ~1560 csomag volt.
+        csoportok: dict = {}
         for subscriber, puffer in pending:
-            send_result = subscriber.flush_property_buffer(puffer)
-            if not send_result:
-                to_remove.add(subscriber)
+            kulcs_fv = getattr(puffer, "content_key", None)
+            kulcs = (type(subscriber), kulcs_fv()) if kulcs_fv is not None else None
+            if kulcs is None or not hasattr(subscriber, "property_packet"):
+                csoportok[("egyedi", id(puffer))] = [(subscriber, puffer)]
+            else:
+                csoportok.setdefault(kulcs, []).append((subscriber, puffer))
+        for kulcs, tagok in csoportok.items():
+            if len(tagok) == 1:
+                subscriber, puffer = tagok[0]
+                if gyujto is not None and hasattr(subscriber, "property_packet"):
+                    gyujto.append((self, subscriber, subscriber.property_packet(puffer)))
+                elif not subscriber.flush_property_buffer(puffer):
+                    to_remove.add(subscriber)
+                continue
+            elso, elso_puffer = tagok[0]
+            bw = elso.property_packet(elso_puffer)
+            fagyaszt = getattr(bw, "frozen_bytes", None)
+            if fagyaszt is not None:
+                fagyaszt()                      # egyszer szerializál, a küldések a kész bájtokat írják
+            for subscriber, puffer in tagok[1:]:
+                puffer.discard(kulcs[1])
+            for subscriber, _ in tagok:
+                if gyujto is not None:
+                    gyujto.append((self, subscriber, bw))
+                elif not subscriber.send_property_packet(bw):
+                    to_remove.add(subscriber)
 
         if not to_remove:
             return len(pending)
@@ -522,8 +566,11 @@ class ShipFeed(SpaceFeed):
                     system_mults_on_guns = system_card.multiply_buffs
                     action_type = kepesseg.ship_ability_card.ability_action_type
                     apply_action_stat_multipliers(action_type, system_mults_on_guns, kepesseg.item_buff_add)
-                for ertek in self.subscribers.values():
-                    ertek.on_slot_update(self, rekesz.ship_system.server_id)
+                if self.subscribers:
+                    from rebsgo.world.objects.numbers.pending.pending_changes import PendingChanges
+                    valtozasok = PendingChanges.slot_changes_for(self, rekesz.ship_system.server_id)
+                    for ertek in self.subscribers.values():
+                        ertek.add_updates(valtozasok)
         self._mark_property_buffers_dirty()
 
     def fold_in_stats(self) -> None:
@@ -533,8 +580,7 @@ class ShipFeed(SpaceFeed):
         self.stats_final.merge_in(self.stats_with_slots)
         self.fold_in_mod_bonus()
         self.fold_in_modifiers()
-        for puffer in self.subscribers.values():
-            puffer.on_stat_moved(self, StatEntry.Stats)
+        self._fan_out(StatEntry.Stats, self.subscribers)
         self._mark_property_buffers_dirty()
         if (ud := self.movement_update_subscriber) is not None:
             ud.take_movement_stats(self)
@@ -633,8 +679,7 @@ class PilotFeed(ShipFeed):
             self.stats_final.merge_in(self.stats_with_slots)
             self.fold_in_modifiers()
             self._apply_skills()
-            for sub in self.subscribers.values():
-                sub.on_stat_moved(self, StatEntry.Stats)
+            self._fan_out(StatEntry.Stats, self.subscribers)
             self._mark_property_buffers_dirty()
             if (ud := self.movement_update_subscriber) is not None:
                 ud.take_movement_stats(self.stats_of)

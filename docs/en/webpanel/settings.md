@@ -51,7 +51,7 @@ there.
 
 | Key | What it sets |
 |---|---|
-| `PANEL_HOST` | the address it listens on: `127.0.0.1` by default (this machine only); `0.0.0.0` = every network — for public reach, put a TLS proxy in front |
+| `PANEL_HOST` | the address it listens on: `0.0.0.0` by default (every network); `127.0.0.1` = this machine only — for public reach, put a TLS proxy in front |
 | `PANEL_PORT` | the panel's port (27055 by default) |
 | `PANEL_DB` | the path to the game database as the panel sees it |
 | `PANEL_LOGIN_ROLES` | which in-game roles may sign in |
