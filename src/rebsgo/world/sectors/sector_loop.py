@@ -8,6 +8,8 @@ from rebsgo.world.sectors.mounts import SeatCount
 from rebsgo.world.sectors.sector_command_queue import SectorCommandQueue
 from rebsgo.world.sectors.sector_gating import SectorGating
 from rebsgo.world.sectors.movement_step import MovementStep
+from rebsgo.world.sectors.sector_helpers import SectorHelpers
+from rebsgo.helpers.thread_structs import own_converters
 from rebsgo.helpers.rolling_latency_stats import (
     ENABLED as GUARDRAILS_ENABLED,
     RollingLatencyStats,
@@ -81,8 +83,13 @@ class Sector:
         self._last_hotpath_summary_ms = now_ms() if SECTOR_HOTPATH_SUMMARY_ENABLED else 0.0
         self._hotpath_stats = {nev: RollingLatencyStats() for nev in _HOTPATH_STAGE_NAMES}
         self._hotpath_timer_stats = {nev: RollingLatencyStats() for nev in _HOTPATH_TIMER_NAMES}
+        self._helpers = SectorHelpers(self.id)
         self._sector_movement_updater = MovementStep(
-            ctx.tick(), ctx.space_objects(), ctx.sender(), self._departures_desk, self._share_book)
+            ctx.tick(), ctx.space_objects(), ctx.sender(), self._departures_desk, self._share_book, self._helpers)
+        for resz in (self._collision_updater, self._timer_updater):
+            use_helpers = getattr(resz, "use_helpers", None)
+            if use_helpers is not None:
+                use_helpers(self._helpers)
         self._sector_command_queue = SectorCommandQueue(self.id)
         self._gating = SectorGating(self.id)
         set_wake_callback = getattr(self._arrival_gate, "wake_with", None)
@@ -171,6 +178,8 @@ class Sector:
     def run(self) -> None:
         current_thread = threading.current_thread()
         current_thread.name = current_thread.name + ' sector [' + str(self.id) + "]"
+        self._helpers.bind_parent(current_thread)
+        own_converters()
 
         while self._sector_is_active:
             try:
@@ -385,6 +394,7 @@ class Sector:
                     )
             except Exception as ex:
                 log.error('Sector[%s] tick blew up %s', self.id, hivasi_lanc(ex))
+        self._helpers.close()
         log.info("Sector[%s] deactivated, is_active-flag: %s", self.id, self._sector_is_active)
 
     def _has_pending_work(self) -> bool:
@@ -578,9 +588,11 @@ class Sector:
         self._cast_desk.finish_tick()
 
     def _wait_for_next_sector_tick(self) -> None:
+        self._helpers.tick_done()
         gating_decision = self._evaluate_gating
         if gating_decision.deep_sleep:
             self._gating.wait_deep_idle()
             self._ctx.tick().sync_to_wall_clock()
-            return
-        self._ctx.tick().sleep_until_next_tick()
+        else:
+            self._ctx.tick().sleep_until_next_tick()
+        self._helpers.tick_begins()

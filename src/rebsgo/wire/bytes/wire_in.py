@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import struct
-
 from rebsgo.wire.bytes.byte_cursor import ByteCursor
+from rebsgo.helpers.thread_structs import CONVERTERS
 from rebsgo.geometry.primitives.euler3 import Euler3
 from rebsgo.geometry.primitives.vector2 import Vector2
 from rebsgo.geometry.primitives.vector3 import Vector3
@@ -29,10 +28,10 @@ class WireIn(ByteCursor):
         return self.available > 0
 
     def read_single(self) -> float:
-        return struct.unpack("<f", self.read_nbytes(4))[0]
+        return CONVERTERS.get().f32.unpack(self.read_nbytes(4))[0]
 
     def read_double(self) -> float:
-        return struct.unpack("<d", self.read_nbytes(8))[0]
+        return CONVERTERS.get().f64.unpack(self.read_nbytes(8))[0]
 
     def read_byte(self) -> int:
         eredmeny = self.read()
@@ -76,7 +75,7 @@ class WireIn(ByteCursor):
         return self.read_uint32()
 
     def read_int64(self) -> int:
-        return struct.unpack("<q", self.read_nbytes(8))[0]
+        return CONVERTERS.get().i64.unpack(self.read_nbytes(8))[0]
 
     def read_uint64(self) -> str:
         return str(self.read_int64() & 0xFFFFFFFFFFFFFFFF)

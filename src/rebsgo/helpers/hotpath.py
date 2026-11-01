@@ -1,8 +1,9 @@
 # github.com/Shran21
 from __future__ import annotations
 
-import struct
 from collections.abc import Iterable, Sequence
+
+from rebsgo.helpers.thread_structs import CONVERTERS, struct_for
 
 
 def nearest_radius_id(
@@ -165,7 +166,7 @@ def _packet_prefix(protocol_id: int, message_type: int, payload_length: int) -> 
     hossz = 1 + 2 + payload_length
     if hossz > 65_535:
         raise ValueError("packet payload too large")
-    return struct.pack(">H", hossz) + struct.pack("<BH", int(protocol_id) & 0xFF, int(message_type) & 0xFFFF)
+    return struct_for(">H").pack(hossz) + struct_for("<BH").pack(int(protocol_id) & 0xFF, int(message_type) & 0xFFFF)
 
 
 def _encode_weapon_shot_packet_python(
@@ -178,8 +179,7 @@ def _encode_weapon_shot_packet_python(
 ) -> bytes:
     return (
         _packet_prefix(protocol_id, message_type, 4 + 2 + 4 + 1)
-        + struct.pack(
-            "<IHIB",
+        + struct_for("<IHIB").pack(
             int(from_obj_id) & 0xFFFFFFFF,
             int(kilovo_pont) & 0xFFFF,
             int(target_obj_id) & 0xFFFFFFFF,
@@ -198,9 +198,10 @@ def _encode_object_left_ids_packet_python(
     if len(materialized) > 65_535:
         raise ValueError("object id collection too large")
     puffer = bytearray(_packet_prefix(protocol_id, message_type, 2 + len(materialized) * 9))
-    puffer.extend(struct.pack("<H", len(materialized)))
+    puffer.extend(CONVERTERS.get().u16.pack(len(materialized)))
+    egy = struct_for("<IIB")
     for object_id in materialized:
-        puffer.extend(struct.pack("<IIB", object_id & 0xFFFFFFFF, 0, int(removing_cause) & 0xFF))
+        puffer.extend(egy.pack(object_id & 0xFFFFFFFF, 0, int(removing_cause) & 0xFF))
     return bytes(puffer)
 
 
@@ -218,8 +219,7 @@ def _encode_combat_info_packet_python(
     destroyed_and_critical |= 2 if landed_critical else 0
     return (
         _packet_prefix(protocol_id, message_type, 1 + 4 + 4 + 1)
-        + struct.pack(
-            "<?IfB",
+        + struct_for("<?IfB").pack(
             bool(sajat_sebzes),
             int(object_id) & 0xFFFFFFFF,
             -float(damage),

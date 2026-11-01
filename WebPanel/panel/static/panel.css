@@ -942,8 +942,18 @@ th.selcell, td.selcell { width: 1%; padding-right: 0; }
 .thr-load .mbar { flex: 1; }
 .thr-pct { min-width: 56px; text-align: right; font-size: 12.5px; }
 .thr-time { font-size: 11.5px; text-align: right; }
+/* a sector's helper threads, indented under the sector's own thread */
+.thr-sub { position: relative; padding-left: 40px; border-top: 1px dashed var(--line); background: var(--bg1); }
+.thr-sub::before {
+  content: ""; position: absolute; left: 24px; top: 0; bottom: 0; border-left: 2px solid var(--line2);
+}
+.thr-sub .thr-who b { font-size: 12.5px; font-weight: 550; color: var(--mut); }
+.thr-who .thr-phases { font-size: 12px; color: var(--acc-text); white-space: normal; }
+.thr-who .thr-together { font-size: 12px; color: var(--mut); white-space: normal; }
 @media (max-width: 700px) {
   .thr-row { grid-template-columns: 1fr; gap: 6px; }
   .thr-time { text-align: left; }
   .thr-sum { margin-left: 0; flex-basis: 100%; }
+  .thr-sub { padding-left: 30px; }
+  .thr-sub::before { left: 16px; }
 }

@@ -141,15 +141,22 @@ def _process_slice(unit: str) -> dict:
 # The load of a thread is its CPU time between two looks, so each look keeps the
 # last one. A single thread can use one core at most: 100% is a saturated thread,
 # and a sector runs on one thread - its ceiling, whatever the machine has left.
+# A crowded sector splits its movement and collision tests among its own helper
+# threads; those tell their sector, their sector thread and their time by phase.
 
 # "crew-26 sector [24]"; the system cuts it to "crew-26 sector" or "crew-6 sector ["
 _SECTOR_THREAD = re.compile(r"^crew-\d+ sector(?: \[(-?\d+)?)?")
-_threads_seen: dict = {"pid": None, "at": 0.0, "cpu": {}, "result": None}
+# "sector [24] helper-2"; the system cuts it to "sector [24] hel"
+_HELPER_THREAD = re.compile(r"^sector \[(-?\d+)\](?: helper-(\d+))?")
+_threads_seen: dict = {"pid": None, "at": 0.0, "cpu": {}, "phases": {}, "result": None}
 _threads_lock = threading.Lock()
 _THREADS_FRESH_SECONDS = 1.0
 
 
 def _thread_kind(name: str) -> tuple:
+    helper = _HELPER_THREAD.match(name)
+    if helper:
+        return "helper", int(helper.group(1))
     sector = _SECTOR_THREAD.match(name)
     if sector:
         return "sector", int(sector.group(1)) if sector.group(1) is not None else None
@@ -164,12 +171,11 @@ def _thread_kind(name: str) -> tuple:
     return "other", None
 
 
-def _thread_names(pid: int) -> dict:
+def _thread_details(pid: int) -> dict:
     told = bridge.threads()
     if not told or told.get("pid") != pid:
         return {}
-    return {int(row["tid"]): str(row["name"]) for row in told.get("threads", [])
-            if row.get("tid") is not None}
+    return {int(row["tid"]): row for row in told.get("threads", []) if row.get("tid") is not None}
 
 
 def _os_thread_name(pid: int, tid: int) -> str:
@@ -198,28 +204,41 @@ def _threads_slice(pid) -> dict | None:
             gap = now - seen["at"] if same else None
             used_now = {row.id: row.user_time + row.system_time for row in rows}
             if gap is None:
-                seen.update(pid=pid, at=now, cpu=used_now, result=None)
+                seen.update(pid=pid, at=now, cpu=used_now, phases={}, result=None)
         if gap is None:
+            first = {tid: row.get("phases") or {} for tid, row in _thread_details(pid).items()}
+            with _threads_lock:
+                _threads_seen["phases"] = first
             time.sleep(0.5)                       # the first look has nothing to compare with
             continue
-        names = _thread_names(pid)
+        details = _thread_details(pid)
+        phases_now = {tid: row.get("phases") or {} for tid, row in details.items()}
         threads = []
         for tid, used in used_now.items():
             before = seen["cpu"].get(tid)
-            name = names.get(tid) or _os_thread_name(pid, tid) or "?"
+            told = details.get(tid, {})
+            name = str(told.get("name") or "") or _os_thread_name(pid, tid) or "?"
             kind, sector = _thread_kind(name)
-            threads.append({
+            row = {
                 "tid": tid, "name": name, "kind": kind, "sector": sector,
                 "sector_name": sector_name(sector) if sector is not None else "",
                 "cpu": round(max(0.0, used - before) / gap * 100, 1) if before is not None else None,
                 "total_s": round(used, 1),
-            })
+            }
+            if kind == "helper":
+                number = _HELPER_THREAD.match(name).group(2)
+                phases_before = seen["phases"].get(tid)
+                row.update(helper=int(number) if number else None, parent_tid=told.get("parent_tid"),
+                           phases={phase: None if phases_before is None else
+                                   round(max(0.0, spent - phases_before.get(phase, 0.0)) / gap * 100, 1)
+                                   for phase, spent in sorted(phases_now.get(tid, {}).items())})
+            threads.append(row)
         threads.sort(key=lambda row: (-(row["cpu"] or 0.0), -row["total_s"]))
-        result = {"pid": pid, "named": bool(names), "window_s": round(gap, 1),
+        result = {"pid": pid, "named": bool(details), "window_s": round(gap, 1),
                   "cpu_sum": round(sum(row["cpu"] or 0.0 for row in threads), 1),
                   "threads": threads}
         with _threads_lock:
-            _threads_seen.update(pid=pid, at=now, cpu=used_now, result=result)
+            _threads_seen.update(pid=pid, at=now, cpu=used_now, phases=phases_now, result=result)
         return result
     return None
 

@@ -42,6 +42,8 @@ class CastQueue(SectorStep):
                  loot_ownership):
         self._ability_cast_requests = deque()
         self._auto_cast_abilities = {}
+        # object id -> the keys of the auto casts it armed: when it leaves, they go too
+        self._auto_keys_by_object = {}
         self._ctx = ctx
         self._deed_source = DeedSource(ctx, engagement, damage_book,
                                        arrival_gate, loot_ownership, self)
@@ -49,6 +51,10 @@ class CastQueue(SectorStep):
         self._sector_id = self._resolve_sector_id(ctx)
         self._auto_cast_next_due_ms = {}
         self._auto_cast_due_heap = []
+        # Players' weapons wait in a line of their own: in the shared one, ordered by when each
+        # cast fell due, a crowd of NPCs - always behind, their per-tick budget always spent - kept
+        # a player's missile waiting for seconds.
+        self._player_due_heap = []
         self._auto_cast_due_sequence = count()
         self._auto_gond_nyom = {}
         self._auto_kudarcok = {}                    # kulcs -> egymás utáni ritkítható kudarcok száma
@@ -72,6 +78,7 @@ class CastQueue(SectorStep):
         kulcs = self._key_of(cast_request)
         elozo = self._auto_cast_abilities.get(kulcs)
         self._auto_cast_abilities[kulcs] = cast_request
+        self._auto_keys_by_object.setdefault(cast_request.casting_ship.id_in_space(), set()).add(kulcs)
         if elozo is cast_request:
             self._ensure_auto_scheduled(kulcs, cast_request)
             return
@@ -82,26 +89,33 @@ class CastQueue(SectorStep):
         self._schedule_auto_cast(kulcs, cast_request, self._next_due_ms_for_request(cast_request))
 
     def disarm_auto_cast(self, ability_id: int, object_id: int) -> None:
-        kulcs = CastOrder.key_for(object_id, ability_id)
+        self._forget_auto_cast(CastOrder.key_for(object_id, ability_id), object_id)
+
+    def _forget_auto_cast(self, kulcs: int, object_id: int) -> None:
         self._auto_cast_abilities.pop(kulcs, None)
         self._auto_due_map().pop(kulcs, None)
         self._kudarcok_map().pop(kulcs, None)
+        kulcsok = self._auto_keys_by_object.get(object_id)
+        if kulcsok is not None:
+            kulcsok.discard(kulcs)
+            if not kulcsok:
+                del self._auto_keys_by_object[object_id]
 
     def drop_auto_casts_of(self, object_id: int) -> None:
-        for ertek in list(self._auto_cast_abilities.values()):
-            if ertek.casting_ship.id_in_space() == object_id:
-                kulcs = self._key_of(ertek)
-                self._auto_cast_abilities.pop(kulcs, None)
-                self._auto_due_map().pop(kulcs, None)
-                self._kudarcok_map().pop(kulcs, None)
+        for kulcs in list(self._auto_keys_by_object.get(object_id, ())):
+            self._forget_auto_cast(kulcs, object_id)
+
+    def on_update(self, tavozas) -> None:
+        # An object left the sector: whatever it had armed goes with it. Kept, an armed
+        # cast held on to the whole ship (systems, stats, locks) for good, and the
+        # sector kept trying to fire it.
+        self.drop_auto_casts_of(tavozas.departed_object.id_in_space())
 
     def remove_auto_cast_abilities_targeting_object(self, casting_object_id: int, target_object_id: int) -> None:
-        for ertek in list(self._auto_cast_abilities.values()):
-            if self._request_targets_object(ertek, casting_object_id, target_object_id):
-                kulcs = self._key_of(ertek)
-                self._auto_cast_abilities.pop(kulcs, None)
-                self._auto_due_map().pop(kulcs, None)
-                self._kudarcok_map().pop(kulcs, None)
+        for kulcs in list(self._auto_keys_by_object.get(casting_object_id, ())):
+            ertek = self._auto_cast_abilities.get(kulcs)
+            if ertek is not None and self._request_targets_object(ertek, casting_object_id, target_object_id):
+                self._forget_auto_cast(kulcs, casting_object_id)
 
         self._ability_cast_requests = deque(
             request for request in self._ability_cast_requests
@@ -171,6 +185,11 @@ class CastQueue(SectorStep):
             self.begin_tick()
         self._bootstrap_auto_due_heap()
         tick_ms = self._current_tick_ms()
+        while not self._ability_cast_requests:
+            due_item = self._pop_due_auto_cast(tick_ms, self._player_due_heap)
+            if due_item is None:
+                break
+            self._fire_auto_cast(*due_item, tick_ms)
         started_ms = now_ms()
         processed = 0
         while True:
@@ -182,37 +201,41 @@ class CastQueue(SectorStep):
             if max_ms is not None and max_ms > 0 and elapsed_ms(started_ms) >= float(max_ms):
                 self._last_stats["auto_budget_exhausted"] = True
                 break
-            due_item = self._pop_due_auto_cast(tick_ms)
+            due_item = self._pop_due_auto_cast(tick_ms, self._auto_cast_due_heap)
             if due_item is None:
                 self._last_stats["auto_skipped_not_due"] = len(self._auto_due_map())
                 break
-            kulcs, cast_request = due_item
-            sikerult = self._process_request(cast_request)
-            if sikerult:
-                self._last_stats["auto_success"] = self._last_stats.get("auto_success", 0) + 1
-            else:
-                self._last_stats["auto_failed"] = self._last_stats.get("auto_failed", 0) + 1
+            self._fire_auto_cast(*due_item, tick_ms)
             processed += 1
-            self._last_stats["auto_processed"] = self._last_stats.get("auto_processed", 0) + 1
-            if self._auto_cast_abilities.get(kulcs) is cast_request:
-                self._schedule_auto_cast(
-                    kulcs,
-                    cast_request,
-                    max(self._next_due_ms_for_request(cast_request),
-                        tick_ms + self._ujraprobalas_kesleltetes(kulcs, sikerult)),
-                    force_next_tick=True,
-                )
         if self._last_stats.get("auto_budget_exhausted"):
             self._last_stats["auto_due_pending"] = len(self._auto_due_map())
         if reset:
             self.finish_tick()
         return processed
 
+    def _fire_auto_cast(self, kulcs, cast_request, tick_ms: int) -> None:
+        sikerult = self._process_request(cast_request)
+        if sikerult:
+            self._last_stats["auto_success"] = self._last_stats.get("auto_success", 0) + 1
+        else:
+            self._last_stats["auto_failed"] = self._last_stats.get("auto_failed", 0) + 1
+        self._last_stats["auto_processed"] = self._last_stats.get("auto_processed", 0) + 1
+        if self._auto_cast_abilities.get(kulcs) is cast_request:
+            self._schedule_auto_cast(
+                kulcs,
+                cast_request,
+                max(self._next_due_ms_for_request(cast_request),
+                    tick_ms + self._ujraprobalas_kesleltetes(kulcs, sikerult)),
+                force_next_tick=True,
+            )
+
     def _ensure_auto_scheduler_state(self) -> None:
         if not hasattr(self, "_auto_cast_next_due_ms"):
             self._auto_cast_next_due_ms = {}
         if not hasattr(self, "_auto_cast_due_heap"):
             self._auto_cast_due_heap = []
+        if not hasattr(self, "_player_due_heap"):
+            self._player_due_heap = []
         if not hasattr(self, "_auto_cast_due_sequence"):
             self._auto_cast_due_sequence = count()
 
@@ -247,6 +270,8 @@ class CastQueue(SectorStep):
     def _bootstrap_auto_due_heap(self) -> None:
         self._ensure_auto_scheduler_state()
         due_map = self._auto_cast_next_due_ms
+        if len(due_map) >= len(self._auto_cast_abilities):
+            return                                  # everything armed is scheduled: no walk over thousands
         for kulcs, request in list(self._auto_cast_abilities.items()):
             if kulcs not in due_map:
                 self._schedule_auto_cast(kulcs, request, self._next_due_ms_for_request(request))
@@ -262,11 +287,11 @@ class CastQueue(SectorStep):
         if force_next_tick:
             due_ms = max(due_ms, most + 1)
         self._auto_cast_next_due_ms[key] = due_ms
-        heapq.heappush(self._auto_cast_due_heap, (due_ms, next(self._auto_cast_due_sequence), key))
+        heap = self._player_due_heap if request.casting_ship.is_player() else self._auto_cast_due_heap
+        heapq.heappush(heap, (due_ms, next(self._auto_cast_due_sequence), key))
 
-    def _pop_due_auto_cast(self, tick_ms: int):
+    def _pop_due_auto_cast(self, tick_ms: int, heap: list):
         self._ensure_auto_scheduler_state()
-        heap = self._auto_cast_due_heap
         due_map = self._auto_cast_next_due_ms
         while heap:
             due_ms, _, kulcs = heap[0]

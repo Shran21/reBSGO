@@ -9,6 +9,9 @@ from itertools import combinations
 from rebsgo.geometry.primitives.vector3 import Vector3
 
 
+_UNKNOWN = object()
+
+
 @dataclass(frozen=True)
 class SpatialStats:
     indexed_objects: int
@@ -57,13 +60,16 @@ class UniformGridSpatialIndex:
         self._bodies: list[_Body] = []
         self._stats = SpatialStats(0, 0, 0, 0, 0)
 
-    def rebuild(self, objektumok) -> None:
+    def rebuild(self, objektumok, bodies=None) -> None:
+        """bodies: id(space_object) -> body_for(space_object), worked out ahead by a grid of the same cell size"""
         self._cells.clear()
         self._global_bodies.clear()
         self._bodies.clear()
 
         for space_object in objektumok:
-            body = self._body_for_object(space_object)
+            body = _UNKNOWN if bodies is None else bodies.get(id(space_object), _UNKNOWN)
+            if body is _UNKNOWN:
+                body = self._body_for_object(space_object)
             if body is None:
                 continue
 
@@ -77,6 +83,9 @@ class UniformGridSpatialIndex:
                 self._cells.setdefault(cell, []).append(body)
 
         self._stats = SpatialStats(len(self._bodies), len(self._cells), len(self._global_bodies), 0, 0)
+
+    def body_for(self, space_object):
+        return self._body_for_object(space_object)
 
     def pairs(self, needs_pair) -> tuple[list[tuple[object, object]], SpatialStats]:
         return self._pairs_python(needs_pair)
@@ -110,8 +119,9 @@ class UniformGridSpatialIndex:
         )
         return filtered_pairs, self._stats
 
-    def query_overlaps(self, space_object, needs_pair) -> list[object]:
-        query_body = self._body_for_object(space_object)
+    def query_overlaps(self, space_object, needs_pair, query_body=_UNKNOWN) -> list[object]:
+        if query_body is _UNKNOWN:
+            query_body = self._body_for_object(space_object)
         if query_body is None:
             return []
 

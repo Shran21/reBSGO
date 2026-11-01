@@ -183,11 +183,22 @@ class PanelDoor:
     def szalak(self) -> dict:
         # The operating system cuts a thread's name to 15 bytes ("crew-26 sector ["),
         # so the panel takes the full names - and with them the sector a thread
-        # runs - from here; it measures the load itself.
+        # runs - from here; it measures the load itself. A sector's helper threads
+        # add their sector, their sector thread and their CPU time by phase.
         import os
-        return {"pid": os.getpid(),
-                "threads": [{"tid": szal.native_id, "name": szal.name, "daemon": szal.daemon}
-                            for szal in threading.enumerate() if szal.native_id is not None]}
+        sorok = []
+        for szal in threading.enumerate():
+            if szal.native_id is None:
+                continue
+            sor = {"tid": szal.native_id, "name": szal.name, "daemon": szal.daemon}
+            reszletek = getattr(szal, "panel_info", None)
+            if callable(reszletek):
+                try:
+                    sor.update(reszletek())
+                except Exception:
+                    log.exception("panel door could not read the details of thread %s", szal.name)
+            sorok.append(sor)
+        return {"pid": os.getpid(), "threads": sorok}
 
     def mentes(self) -> dict:
         pilotak = [user.pilot_of() for user in self._online_users()]

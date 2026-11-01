@@ -347,6 +347,7 @@ class SectorSource:
         remover.watch_with(sector_outpost_progress)
         remover.watch_with(share_book)
         remover.watch_with(damage_log)
+        remover.watch_with(cast_desk)
         remover.watch_with(loot_ownership)
         remover.watch_with(spawn_runner)
         remover.watch_with(object_id_pool)

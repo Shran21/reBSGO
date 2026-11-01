@@ -34,7 +34,13 @@ class SectorDamageLog(DepartureWatcher):
         return dmg_history.kill_shot_dealer()
 
     def on_update(self, arg) -> None:
-        self._object_damage_history_map.pop(arg.departed_object.id_in_space(), None)
+        tavozo = arg.departed_object
+        self._object_damage_history_map.pop(tavozo.id_in_space(), None)
+        # A ship that left is no one's grudge any more: kept, it stayed in memory as
+        # long as anything it ever hit lived. Players stay: their share counts.
+        if not tavozo.is_player():
+            for dmg_history in self._object_damage_history_map.values():
+                dmg_history.forget_departed(tavozo)
 
 
 class WearFromDamage:

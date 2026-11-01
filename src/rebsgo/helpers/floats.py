@@ -5,14 +5,26 @@ from __future__ import annotations
 import math
 import struct
 
-_PACK = struct.Struct("<f").pack
-_UNPACK = struct.Struct("<f").unpack
+from rebsgo.helpers.thread_structs import F32, F32X3, F32X4
 
 FLOAT_MAX_VALUE = struct.unpack("<f", b"\xff\xff\x7f\x7f")[0]
 
 
 def f32(value: float) -> float:
-    return _UNPACK(_PACK(value))[0]
+    # a busy thread converts with its own Struct: a shared one is a lock without the GIL
+    pack, unpack = F32.get()
+    return unpack(pack(value))[0]
+
+
+def f32x3(a: float, b: float, c: float) -> tuple:
+    # (f32(a), f32(b), f32(c)) - bit for bit - with one conversion instead of three
+    pack, unpack = F32X3.get()
+    return unpack(pack(a, b, c))
+
+
+def f32x4(a: float, b: float, c: float, d: float) -> tuple:
+    pack, unpack = F32X4.get()
+    return unpack(pack(a, b, c, d))
 
 
 def fdiv(a: float, b: float) -> float:

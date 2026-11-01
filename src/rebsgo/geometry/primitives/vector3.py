@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 from rebsgo.geometry.maths.maths import Maths
-from rebsgo.helpers.floats import f32
+from rebsgo.helpers.floats import f32, f32x3
 from rebsgo.helpers.copyable import Copyable
 
 _EGYSEGHOSSZ_TURES = f32(1e-05)
@@ -23,9 +23,7 @@ class Vector3(Copyable["Vector3"]):
         if math.isnan(z):
             raise ArithmeticError('z came out NaN')
 
-        self.x = f32(x)
-        self.y = f32(y)
-        self.z = f32(z)
+        self.x, self.y, self.z = f32x3(x, y, z)
 
     @staticmethod
     def of_array(numbers) -> "Vector3":
@@ -122,9 +120,7 @@ class Vector3(Copyable["Vector3"]):
 
 
     def xyz_to(self, x, y, z) -> None:
-        self.x = f32(x)
-        self.y = f32(y)
-        self.z = f32(z)
+        self.x, self.y, self.z = f32x3(x, y, z)
 
     def copy_from(self, other: "Vector3") -> None:
         self.x = other.x
@@ -166,13 +162,9 @@ class Vector3(Copyable["Vector3"]):
 
     def add_(self, arg) -> "Vector3":
         if isinstance(arg, Vector3):
-            self.x = f32(self.x + arg.x)
-            self.y = f32(self.y + arg.y)
-            self.z = f32(self.z + arg.z)
+            self.x, self.y, self.z = f32x3(self.x + arg.x, self.y + arg.y, self.z + arg.z)
         else:
-            self.x = f32(self.x + arg)
-            self.y = f32(self.y + arg)
-            self.z = f32(self.z + arg)
+            self.x, self.y, self.z = f32x3(self.x + arg, self.y + arg, self.z + arg)
         return self
 
     @staticmethod
@@ -186,13 +178,9 @@ class Vector3(Copyable["Vector3"]):
 
     def sub_(self, arg) -> "Vector3":
         if isinstance(arg, Vector3):
-            self.x = f32(self.x - arg.x)
-            self.y = f32(self.y - arg.y)
-            self.z = f32(self.z - arg.z)
+            self.x, self.y, self.z = f32x3(self.x - arg.x, self.y - arg.y, self.z - arg.z)
         else:
-            self.x = f32(self.x - arg)
-            self.y = f32(self.y - arg)
-            self.z = f32(self.z - arg)
+            self.x, self.y, self.z = f32x3(self.x - arg, self.y - arg, self.z - arg)
         return self
 
     @staticmethod
@@ -204,9 +192,7 @@ class Vector3(Copyable["Vector3"]):
         return Vector3(v.x * szam, v.y * szam, v.z * szam)
 
     def mult_(self, num: float) -> "Vector3":
-        self.x = f32(self.x * num)
-        self.y = f32(self.y * num)
-        self.z = f32(self.z * num)
+        self.x, self.y, self.z = f32x3(self.x * num, self.y * num, self.z * num)
         return self
 
     @staticmethod

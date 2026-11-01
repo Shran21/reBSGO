@@ -17,7 +17,9 @@ def build_complete_spatial_index(objects, cell_size: float, max_cells_per_object
         return None
 
 
-def ordered_radius_candidates(objects, spatial_index, center, radius: float, always_include=None, stats: dict | None = None):
+def ordered_radius_candidates(objects, spatial_index, center, radius: float, always_include=None, stats: dict | None = None,
+                              order: dict | None = None):
+    """order: id(object) -> its place in objects, worked out once by a caller that asks many times"""
     if spatial_index is None:
         return objects
 
@@ -25,6 +27,13 @@ def ordered_radius_candidates(objects, spatial_index, center, radius: float, alw
     if stats is not None:
         stats["spatial_queries"] = stats.get("spatial_queries", 0) + 1
         stats["spatial_candidates"] = stats.get("spatial_candidates", 0) + len(jeloltek)
+
+    if order is not None:
+        # the found ones in the objects' order, without going through all the objects
+        helyek = {order[id(space_object)]: space_object for space_object in jeloltek if id(space_object) in order}
+        if always_include is not None and id(always_include) in order:
+            helyek[order[id(always_include)]] = always_include
+        return [helyek[hely] for hely in sorted(helyek)]
 
     candidate_ids = {space_object.id_in_space() for space_object in jeloltek}
     if always_include is not None:

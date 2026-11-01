@@ -7,16 +7,16 @@ import math
 from rebsgo.geometry.primitives.quaternion import Quaternion
 from rebsgo.geometry.primitives.vector3 import Vector3
 from rebsgo.geometry.maths.maths import Maths
-from rebsgo.helpers.floats import f32
+from rebsgo.helpers.floats import f32, f32x3
 
 
 class Euler3:
 
 
     def __init__(self, pitch=0.0, yaw=0.0, roll=0.0):
-        self._pitch = 0.0 if math.isnan(pitch) else f32(pitch)
-        self._yaw = 0.0 if math.isnan(yaw) else f32(yaw)
-        self._roll = 0.0 if math.isnan(roll) else f32(roll)
+        self._pitch, self._yaw, self._roll = f32x3(0.0 if math.isnan(pitch) else pitch,
+                                                   0.0 if math.isnan(yaw) else yaw,
+                                                   0.0 if math.isnan(roll) else roll)
 
     def copy(self) -> "Euler3":
         masolat = Euler3.__new__(Euler3)
@@ -84,9 +84,7 @@ class Euler3:
         self._roll = f32(roll)
 
     def copy_angles_from(self, pitch, yaw, roll) -> None:
-        self._pitch = f32(pitch)
-        self._yaw = f32(yaw)
-        self._roll = f32(roll)
+        self._pitch, self._yaw, self._roll = f32x3(pitch, yaw, roll)
 
 
     @staticmethod
@@ -94,9 +92,8 @@ class Euler3:
         return a.copy().add_(b)
 
     def add_(self, other: "Euler3") -> "Euler3":
-        self._pitch = f32(self._pitch + other._pitch)
-        self._yaw = f32(self._yaw + other._yaw)
-        self._roll = f32(self._roll + other._roll)
+        self._pitch, self._yaw, self._roll = f32x3(
+            self._pitch + other._pitch, self._yaw + other._yaw, self._roll + other._roll)
         return self
 
     @staticmethod
@@ -108,9 +105,7 @@ class Euler3:
         return a.copy().mult_(b)
 
     def mult_(self, num: float) -> "Euler3":
-        self._pitch = f32(self._pitch * num)
-        self._yaw = f32(self._yaw * num)
-        self._roll = f32(self._roll * num)
+        self._pitch, self._yaw, self._roll = f32x3(self._pitch * num, self._yaw * num, self._roll * num)
         return self
 
     @staticmethod

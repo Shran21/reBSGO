@@ -115,6 +115,17 @@ pilots inside, refreshed every five seconds, with an hour or 24 hours of
 history that survives a panel restart (in
 small charts).
 
+The **Threads** card shows the game server's threads by group (sectors,
+incoming connections, sending, scheduled tasks…), each with its name, its
+sector and its load (100% = one whole processor core). It filters by sector
+name or number, thread name or TID, and the groups and the card itself fold.
+A sector's own thread runs on a single core; when a sector's ticks stay heavy,
+its own **helper threads** share the movement, the collision tests and the
+NPCs' target picking. They
+show indented under the sector's thread, broken down by phase (movement,
+collision tests, NPC targeting), and the sector's row gives the load together with its
+helpers. Idle helpers stop after a few minutes.
+
 ## Rankings
 
 A live view of the in-game leaderboards from the tallies, next to the

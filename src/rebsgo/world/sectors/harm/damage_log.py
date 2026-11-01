@@ -10,13 +10,18 @@ from rebsgo.helpers.small_things import OrderedSet
 
 
 class DamageLog:
-    NAPLO_HOSSZ = 1_000
+    # Every hit names both ships: with a thousand of them kept for every ship, a
+    # crowded fight held on to long dead ships - every system, stat and lock of
+    # theirs - and the sector grew slower by the minute. The latest hits are
+    # enough; the latest one from a player is kept apart, however old.
+    NAPLO_HOSSZ = 32
 
     def __init__(self, itt_levok):
         self._sum_damage = 0.0
         self._damage_map = {}
         self._by_damage_dealt = OrderedSet()
         self._damage_records = deque()
+        self._last_player_record = None
         self._sector_users = itt_levok
 
     @property
@@ -65,6 +70,14 @@ class DamageLog:
         if len(self._damage_records) >= self.NAPLO_HOSSZ:
             self._damage_records.popleft()
         self._damage_records.append(sebzes_sor)
+        if sebzes_sor.from_.is_player():
+            self._last_player_record = sebzes_sor
+
+    def forget_departed(self, tavozo) -> None:
+        if (damage_so_far := self._damage_map.get(tavozo.id_in_space())) is not None:
+            self.forget_dealer(damage_so_far)
+        if any(sor.from_ is tavozo for sor in self._damage_records):
+            self._damage_records = deque(sor for sor in self._damage_records if sor.from_ is not tavozo)
 
     def forget_dealer(self, damage_so_far) -> None:
         self._damage_map.pop(damage_so_far.dealer.id_in_space(), None)
@@ -92,10 +105,7 @@ class DamageLog:
         return self._damage_records[-1] if self._damage_records else None
 
     def last_damage_by_player(self):
-        for tetel in reversed(self._damage_records):
-            if tetel.from_.is_player():
-                return tetel
-        return None
+        return self._last_player_record
 
     @property
     def took_damage(self) -> bool:

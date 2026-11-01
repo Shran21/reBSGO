@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import datetime as _dt
-import struct
 
 from rebsgo.wire.bytes.growing_buffer import (
     GrowingBuffer,
 )
 from rebsgo.helpers.floats import f32
+from rebsgo.helpers.thread_structs import CONVERTERS
 
 
 def _to_epoch_second_utc(dt: _dt.datetime) -> int:
@@ -40,14 +40,14 @@ class WireOut(GrowingBuffer):
         return self
 
     def write_single(self, f: float) -> "WireOut":
-        self.write(struct.pack("<f", f))
+        self.write(CONVERTERS.get().f32.pack(f))
         return self
 
     def write_double(self, d: float) -> None:
-        self.write(struct.pack("<d", d))
+        self.write(CONVERTERS.get().f64.pack(d))
 
     def write_int16(self, s: int) -> "WireOut":
-        self.write(struct.pack("<H", s & 0xFFFF))
+        self.write(CONVERTERS.get().u16.pack(s & 0xFFFF))
         return self
 
     def write_uint16(self, i: int) -> "WireOut":
@@ -62,7 +62,7 @@ class WireOut(GrowingBuffer):
         return self.write_uint16(i)
 
     def write_int32(self, i: int) -> "WireOut":
-        self.write(struct.pack("<I", i & 0xFFFFFFFF))
+        self.write(CONVERTERS.get().u32.pack(i & 0xFFFFFFFF))
         return self
 
     def write_guid(self, l: int) -> "WireOut":
@@ -94,7 +94,7 @@ class WireOut(GrowingBuffer):
             self.write_uint32(l)
 
     def write_int64(self, l: int) -> "WireOut":
-        self.write(struct.pack("<Q", l & 0xFFFFFFFFFFFFFFFF))
+        self.write(CONVERTERS.get().u64.pack(l & 0xFFFFFFFFFFFFFFFF))
         return self
 
     def write_uint64(self, l: int) -> None:
@@ -151,16 +151,16 @@ class WireOut(GrowingBuffer):
         self.write(bytes([r, g, b, a]))
 
     def write_vector3(self, position) -> None:
-        self.write(struct.pack("<fff", position.x, position.y, position.z))
+        self.write(CONVERTERS.get().f32x3.pack(position.x, position.y, position.z))
 
     def write_vector2(self, vector2) -> None:
-        self.write(struct.pack("<ff", vector2.x, vector2.y))
+        self.write(CONVERTERS.get().f32x2.pack(vector2.x, vector2.y))
 
     def write_euler3(self, euler3) -> None:
-        self.write(struct.pack("<fff", euler3.pitch, euler3.yaw, euler3.roll))
+        self.write(CONVERTERS.get().f32x3.pack(euler3.pitch, euler3.yaw, euler3.roll))
 
     def write_quaternion(self, rotation) -> None:
-        self.write(struct.pack("<ffff", rotation.x, rotation.y, rotation.z, rotation.w))
+        self.write(CONVERTERS.get().f32x4.pack(rotation.x, rotation.y, rotation.z, rotation.w))
 
     def write_date_time(self, received: _dt.datetime) -> None:
         self.write_uint32(_to_epoch_second_utc(received))

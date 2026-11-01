@@ -22,6 +22,11 @@ _SPATIAL_INDEX_MIN_OBJECTS = _CONFIG.int("rebsgo.sector.spatial-index.min-object
 _SPATIAL_INDEX_MAX_CELLS_PER_OBJECT = _CONFIG.int(
     "rebsgo.sector.spatial-index.max-cells-per-object", 512)
 _SPATIAL_INDEX_PRIMITIVE_ENABLED = _CONFIG.bool("rebsgo.sector.spatial-index.primitive-enabled", True)
+_NOT_SYNCED = (ObjectKind.Asteroid, ObjectKind.Planetoid, ObjectKind.Planet, ObjectKind.Debris)
+
+
+def _any_pair(_first, _second) -> bool:
+    return True
 
 
 class ContactSweep(SectorStep):
@@ -30,6 +35,8 @@ class ContactSweep(SectorStep):
         self._collision_resolution = utkozes_feloldas
         self._intersection_filter = metszes_szuro
         self._tick = tick
+        self._helpers = None
+        self._places = UniformGridSpatialIndex(_SPATIAL_INDEX_CELL_SIZE, _SPATIAL_INDEX_MAX_CELLS_PER_OBJECT)
         self._last_stats = {
             "candidate_objects": 0,
             "moving_colliders": 0,
@@ -48,6 +55,17 @@ class ContactSweep(SectorStep):
             "sphere_pair_rejected": 0,
         }
 
+    def use_helpers(self, segedek) -> None:
+        self._helpers = segedek
+
+    def _split(self, work, items) -> list:
+        # the collision tests only read the colliders: pieces of them run side by side
+        if self._helpers is None:
+            return [work(items)]
+        if not isinstance(items, (list, tuple)):
+            items = list(items)
+        return self._helpers.split("collision", work, items)
+
     def _prepare_pairs_plain(self, objects):
         utkozok = [o for o in objects if o.collider_of() is not None]
         collision_pairs = [ContactPair(a, b)
@@ -60,7 +78,7 @@ class ContactSweep(SectorStep):
         self._last_stats["spatial_raw_pairs"] = len(collision_pairs)
         return collision_pairs
 
-    def _prepare_pairs_to_check2(self):
+    def _prepare_pairs_to_check2(self, bodies=None):
         objects = self._space_objects.space_objects_not_of_entity_type(
             ObjectKind.Asteroid, ObjectKind.Missile, ObjectKind.Comet)
         meret = len(objects)
@@ -70,7 +88,7 @@ class ContactSweep(SectorStep):
         else:
             try:
                 sorszam = UniformGridSpatialIndex(_SPATIAL_INDEX_CELL_SIZE, _SPATIAL_INDEX_MAX_CELLS_PER_OBJECT)
-                sorszam.rebuild(objects)
+                sorszam.rebuild(objects, bodies)
                 pairs, mutatok = sorszam.pairs(self._intersection_filter.worth_testing)
                 collision_pairs = [ContactPair(elso, second) for elso, second in pairs]
                 self._last_stats["spatial_enabled"] = 1
@@ -86,6 +104,18 @@ class ContactSweep(SectorStep):
         return collision_pairs
 
     def _actual_collision_check(self, pairs_to_check):
+        pairs_collided = []
+        sphere_pair_candidates = 0
+        sphere_pair_rejected = 0
+        for hits, candidates, rejected in self._split(self._check_pairs, pairs_to_check):
+            pairs_collided.extend(hits)
+            sphere_pair_candidates += candidates
+            sphere_pair_rejected += rejected
+        self._last_stats["sphere_pair_candidates"] = sphere_pair_candidates
+        self._last_stats["sphere_pair_rejected"] = sphere_pair_rejected
+        return pairs_collided
+
+    def _check_pairs(self, pairs_to_check) -> tuple:
         pairs_collided = []
         sphere_pair_records = []
         sphere_pair_indexes = set()
@@ -108,8 +138,7 @@ class ContactSweep(SectorStep):
                 overlapping_sphere_indexes = sphere_pair_indexes
         else:
             overlapping_sphere_indexes = set()
-        self._last_stats["sphere_pair_candidates"] = len(sphere_pair_records)
-        self._last_stats["sphere_pair_rejected"] = max(0, len(sphere_pair_records) - len(overlapping_sphere_indexes))
+        sphere_pair_rejected = max(0, len(sphere_pair_records) - len(overlapping_sphere_indexes))
 
         for sorszam, collision_pair in enumerate(pairs_to_check):
             if sorszam in sphere_pair_indexes and sorszam not in overlapping_sphere_indexes:
@@ -123,7 +152,7 @@ class ContactSweep(SectorStep):
             if collision_record is not None:
                 pairs_collided.append(Hit(collision_record, collision_pair.first(), collision_pair.second()))
 
-        return pairs_collided
+        return pairs_collided, len(sphere_pair_records), sphere_pair_rejected
 
     @staticmethod
     def _sphere_pair_record(index: int, first_collider, second_collider):
@@ -148,9 +177,9 @@ class ContactSweep(SectorStep):
         )
 
     def run(self) -> None:
-        moving_colliders = self.begin_collision_pass()
-        primitive_results = self.primitive_collision_results
-        contact_results = self._get_collision_results()
+        moving_colliders, bodies = self._begin_pass()
+        primitive_results = self._primitive_check(bodies)
+        contact_results = self._get_collision_results(bodies)
 
         self._collision_resolution.move_clock_to(self._tick.copy())
         self._collision_resolution.attach_contact_details(primitive_results, contact_results)
@@ -160,9 +189,40 @@ class ContactSweep(SectorStep):
         self._last_stats["contact_collisions"] = len(contact_results)
 
     def begin_collision_pass(self) -> int:
+        return self._begin_pass()[0]
+
+    def _begin_pass(self) -> tuple:
+        """(moving colliders synced, the grid bodies or None)
+
+        In a crowded sector every object's body - its box and cells in the spatial
+        grids - is worked out here once, right after its collider is synced, and
+        this tick's grids all take it from there."""
+        if not _SPATIAL_INDEX_ENABLED or self._space_objects.size() < _SPATIAL_INDEX_MIN_OBJECTS:
+            return sum(self._split(self._sync_moving_colliders,
+                                   self._space_objects.objects_other_than(*_NOT_SYNCED))), None
         moving_colliders = 0
-        for space_object in self._space_objects.objects_other_than(
-                ObjectKind.Asteroid, ObjectKind.Planetoid, ObjectKind.Planet, ObjectKind.Debris):
+        bodies = {}
+        for synced, placed in self._split(self._sync_and_place, self._space_objects.values()):
+            moving_colliders += synced
+            bodies.update(placed)
+        return moving_colliders, bodies
+
+    def _sync_and_place(self, space_objects) -> tuple:
+        moving_colliders = 0
+        placed = {}
+        for space_object in space_objects:
+            utkozotest = space_object.collider_of()
+            if utkozotest is not None and not space_object.space_entity_type.of_kind(*_NOT_SYNCED) \
+                    and space_object.mover_of().is_moving_object:
+                utkozotest.sync_to_transform()
+                moving_colliders += 1
+            placed[id(space_object)] = None if utkozotest is None else self._places.body_for(space_object)
+        return moving_colliders, placed
+
+    @staticmethod
+    def _sync_moving_colliders(space_objects) -> int:
+        moving_colliders = 0
+        for space_object in space_objects:
             if not space_object.mover_of().is_moving_object:
                 continue
             if (utkozotest := space_object.collider_of()) is not None:
@@ -170,11 +230,11 @@ class ContactSweep(SectorStep):
                 moving_colliders += 1
         return moving_colliders
 
-    def _get_collision_results(self):
-        pairs_to_check = self._prepare_pairs_to_check2()
+    def _get_collision_results(self, bodies=None):
+        pairs_to_check = self._prepare_pairs_to_check2(bodies)
         return self._actual_collision_check(pairs_to_check)
 
-    def _primitive_check(self):
+    def _primitive_check(self, bodies=None):
         parosok = []
         raketak = self._space_objects.space_objects_of_entity_type(ObjectKind.Missile)
 
@@ -184,14 +244,11 @@ class ContactSweep(SectorStep):
         primitive_candidate_pairs = 0
         primitive_spatial_enabled = False
 
-        asteroid_player_comet_pairs = self._primitive_candidate_pairs(asteroids, players_and_comets)
-        if asteroid_player_comet_pairs is not None:
+        found = self._spatial_primitive(asteroids, players_and_comets, None, bodies)
+        if found is not None:
             primitive_spatial_enabled = True
-            for asteroid, player_comet in asteroid_player_comet_pairs:
-                primitive_candidate_pairs += 1
-                eredmeny = self._check_primitive(asteroid, player_comet)
-                if eredmeny is not None:
-                    parosok.append(eredmeny)
+            primitive_candidate_pairs += found[1]
+            parosok.extend(found[0])
         else:
             for asteroid in asteroids:
                 for player_comet in players_and_comets:
@@ -215,15 +272,12 @@ class ContactSweep(SectorStep):
         test_against_missiles.extend(self._space_objects.space_objects_of_entity_types(
             ObjectKind.Planetoid, ObjectKind.Comet, ObjectKind.Debris))
 
-        missile_pairs = self._primitive_candidate_pairs(
-            raketak, test_against_missiles, self._intersection_filter.test_missile_primitive)
-        if missile_pairs is not None:
+        found = self._spatial_primitive(
+            raketak, test_against_missiles, self._intersection_filter.test_missile_primitive, bodies)
+        if found is not None:
             primitive_spatial_enabled = True
-            for raketa, space_object in missile_pairs:
-                primitive_candidate_pairs += 1
-                eredmeny = self._check_primitive(raketa, space_object)
-                if eredmeny is not None:
-                    parosok.append(eredmeny)
+            primitive_candidate_pairs += found[1]
+            parosok.extend(found[0])
         else:
             for raketa in raketak:
                 for space_object in test_against_missiles:
@@ -240,26 +294,36 @@ class ContactSweep(SectorStep):
         self._last_stats["primitive_candidate_pairs"] = primitive_candidate_pairs
         return parosok
 
-    def _primitive_candidate_pairs(self, probes, targets, needs_pair=None):
+    def _spatial_primitive(self, probes, targets, needs_pair, bodies):
+        """(hits, candidate pairs) of the probes against the targets; None when the grid is off or not worth it"""
         if not _SPATIAL_INDEX_ENABLED or not _SPATIAL_INDEX_PRIMITIVE_ENABLED:
             return None
         if not probes or not targets:
-            return []
+            return [], 0
         if len(probes) * len(targets) < _SPATIAL_INDEX_MIN_OBJECTS:
             return None
         try:
             if needs_pair is None:
-                needs_pair = lambda _first, _second: True
+                needs_pair = _any_pair
             sorszam = UniformGridSpatialIndex(_SPATIAL_INDEX_CELL_SIZE, _SPATIAL_INDEX_MAX_CELLS_PER_OBJECT)
-            sorszam.rebuild(targets)
-            parosok = []
-            for probe in probes:
-                for celpont in sorszam.query_overlaps(probe, needs_pair):
-                    parosok.append((probe, celpont))
-            return parosok
+            sorszam.rebuild(targets, bodies)
+            reszek = self._split(lambda chunk: self._probe_hits(sorszam, chunk, needs_pair, bodies), probes)
         except Exception:
             log.exception("Spatial primitive broadphase failed; falling back to legacy primitive scan")
             return None
+        return [eredmeny for resz in reszek for eredmeny in resz[0]], sum(resz[1] for resz in reszek)
+
+    def _probe_hits(self, sorszam, probes, needs_pair, bodies) -> tuple:
+        parosok = []
+        candidate_pairs = 0
+        for probe in probes:
+            body = bodies[id(probe)] if bodies is not None and id(probe) in bodies else sorszam.body_for(probe)
+            for celpont in sorszam.query_overlaps(probe, needs_pair, body):
+                candidate_pairs += 1
+                eredmeny = self._check_primitive(probe, celpont)
+                if eredmeny is not None:
+                    parosok.append(eredmeny)
+        return parosok, candidate_pairs
 
     @staticmethod
     def _check_primitive(elso, masodik):

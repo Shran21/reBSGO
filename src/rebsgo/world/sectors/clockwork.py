@@ -1467,9 +1467,11 @@ class NpcRounds(AfterDelay):
         self.sector_cards = szektor_kartyak
         self._target_cycle_candidates = None
         self._target_cycle_spatial_index = None
+        self._target_cycle_order = None
         self._targeting_trail = {}
         self._last_target_scan_warn_ms = 0.0
         self._target_cycle_stats = None
+        self._helpers = None
         self._last_stats = {
             "candidate_objects": 0,
             "npc_queries": 0,
@@ -1493,6 +1495,8 @@ class NpcRounds(AfterDelay):
         self._target_cycle_candidates = jeloltek
         spatial_index = self._build_target_spatial_index(jeloltek)
         self._target_cycle_spatial_index = spatial_index
+        self._target_cycle_order = (None if spatial_index is None
+                                    else {id(jelolt): hely for hely, jelolt in enumerate(jeloltek)})
         spatial_stats = spatial_index.stats if spatial_index is not None else None
         self._target_cycle_stats = {
             "candidate_objects": len(jeloltek),
@@ -1538,8 +1542,12 @@ class NpcRounds(AfterDelay):
             )
         self._target_cycle_candidates = None
         self._target_cycle_spatial_index = None
+        self._target_cycle_order = None
         self._targeting_trail = {}
         self._target_cycle_stats = None
+
+    def use_helpers(self, segedek) -> None:
+        self._helpers = segedek
 
     def _record_targeting_stat(self, key: str, increment: int = 1) -> None:
         if (mutatok := getattr(self, '_target_cycle_stats', None)) is not None:
@@ -1779,6 +1787,7 @@ class NpcRounds(AfterDelay):
                     against_position,
                     query_radius,
                     stats=self._target_cycle_stats,
+                    order=getattr(self, "_target_cycle_order", None),
                 )
             jeloltek = spatial_index.query_radius(against_position, query_radius)
             self._record_targeting_stat("spatial_queries")
@@ -3105,6 +3114,11 @@ class ClockworkStep(SectorStep):
             "timer_details": {},
         }
 
+    def use_helpers(self, segedek) -> None:
+        for ora in self._timers:
+            if (use_helpers := getattr(ora, "use_helpers", None)) is not None:
+                use_helpers(segedek)
+
     def run(self, timer_mode: str = TIMER_MODE_FULL) -> None:
         dt = self._tick.delta_time()
         tick_value = self._tick.value
@@ -3303,6 +3317,11 @@ class NpcSteering(NpcRounds):
         try:
             moving_bot_fighter_movings = self.sector_objects.objects_of_kind(
                 ObjectKind.BotFighter)
+            if self._helpers is not None:
+                moving_bot_fighter_movings = list(moving_bot_fighter_movings)
+                if self._helpers.pieces_for(len(moving_bot_fighter_movings)) > 1:
+                    self._steer_split(moving_bot_fighter_movings)
+                    return
             for roaming_bot in moving_bot_fighter_movings:
                 jumped_out = self._jump_out_npc_if_no_more_targets(roaming_bot)
                 if jumped_out:
@@ -3322,6 +3341,33 @@ class NpcSteering(NpcRounds):
                     self.steer_bot(roaming_bot, closest)
         finally:
             self._end_targeting_cycle("NpcSteering")
+
+    def _steer_split(self, bots) -> None:
+        # Jumping out first, alone and in order: it changes what the others may aim
+        # at. Then the targets side by side - picking one reads the others, and
+        # writes only the bot's own grudge list and its own line in the target
+        # cache. Then arming and steering alone, in the old order. The per-check
+        # counters stay off while the targets are picked: one dict written from
+        # every helper would be a lock they queue up on.
+        staying = [bot for bot in bots if not self._jump_out_npc_if_no_more_targets(bot)]
+        mutatok, self._target_cycle_stats = self._target_cycle_stats, None
+        try:
+            targets = [celpont for part in self._helpers.split("npc", self._pick_targets, staying)
+                       for celpont in part]
+        finally:
+            self._target_cycle_stats = mutatok
+        for roaming_bot, closest in zip(staying, targets):
+            if closest is None and len(roaming_bot.patrol_objectives()) == 0:
+                continue
+            self._update_weapons(roaming_bot, closest)
+            self._update_abilities(roaming_bot, closest)
+            if closest is None:
+                self.steer_bot(roaming_bot)
+            else:
+                self.steer_bot(roaming_bot, closest)
+
+    def _pick_targets(self, bots) -> list:
+        return [self._pick_target_cached(bot) for bot in bots]
 
     def _pick_target_cached(self, bot):
         cached = self._cached_target_for(bot)

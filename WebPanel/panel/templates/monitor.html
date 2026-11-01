@@ -79,6 +79,10 @@
               "none": t('monitor.thr.none'), "nodata": t('monitor.thr.nodata'),
               "measuring": t('monitor.thr.measuring'), "cputime": t('monitor.thr.cputime'),
               "unknown_sector": t('monitor.thr.unknown_sector'),
+              "helper": t('monitor.thr.helper'), "with_helpers": t('monitor.thr.with_helpers'),
+              "phase": {"movement": t('monitor.thr.phase.movement'),
+                        "collision": t('monitor.thr.phase.collision'),
+                        "npc": t('monitor.thr.phase.npc')},
               "kind": {"sector": t('monitor.thr.kind.sector'), "conn": t('monitor.thr.kind.conn'),
                        "send": t('monitor.thr.kind.send'), "task": t('monitor.thr.kind.task'),
                        "worker": t('monitor.thr.kind.worker'), "other": t('monitor.thr.kind.other')}} | tojson }};
@@ -180,12 +184,25 @@
   }
   thrCard.addEventListener("toggle", keep);
 
+  function sectorLabel(row) {
+    return row.sector === null || row.sector === undefined ? S.unknown_sector
+      : row.sector_name + " (#" + row.sector + ")";
+  }
+  function helperLabel(row) { return S.helper + (row.helper ? " " + row.helper : ""); }
   function label(row) {
-    if (row.kind === "sector") {
-      return row.sector === null || row.sector === undefined ? S.unknown_sector
-        : row.sector_name + " (#" + row.sector + ")";
-    }
+    if (row.kind === "sector") { return sectorLabel(row); }
+    if (row.kind === "helper") { return helperLabel(row) + " · " + sectorLabel(row); }
     return S.kind[row.kind] || row.kind;
+  }
+  function phaseText(row) {
+    return Object.keys(row.phases || {}).filter(function (phase) {
+      return row.phases[phase] !== null && row.phases[phase] >= 0.1;
+    }).map(function (phase) {
+      return (S.phase[phase] || phase) + " " + row.phases[phase].toFixed(1) + "%";
+    }).join(" · ");
+  }
+  function withHelpers(row) {
+    return (row.helpers || []).reduce(function (acc, helper) { return acc + (helper.cpu || 0); }, row.cpu || 0);
   }
   function pct(value) { return value === null || value === undefined ? "…" : value.toFixed(1) + "%"; }
   function el(tag, cls, text) {
@@ -194,11 +211,17 @@
     if (text !== undefined) { node.textContent = text; }
     return node;
   }
-  function threadRow(row) {
-    var line = el("div", "thr-row");
+  function threadRow(row, nested) {
+    var line = el("div", nested ? "thr-row thr-sub" : "thr-row");
     var who = el("div", "thr-who");
-    who.appendChild(el("b", "", label(row)));
+    who.appendChild(el("b", "", nested ? "↳ " + helperLabel(row) : label(row)));
+    var phases = row.kind === "helper" ? phaseText(row) : "";
+    if (phases) { who.appendChild(el("span", "thr-phases", phases)); }
     who.appendChild(el("span", "mono dim", row.name + " · TID " + row.tid));
+    if (row.helpers && row.helpers.length) {
+      who.appendChild(el("span", "thr-together",
+        S.with_helpers.replace("{n}", row.helpers.length) + " " + withHelpers(row).toFixed(1) + "%"));
+    }
     var load = el("div", "thr-load");
     var meter = el("div", "mbar");
     var fill = el("i", row.cpu > 90 ? "hot" : row.cpu > 70 ? "warm" : "");
@@ -225,20 +248,46 @@
     var all = info.threads || [];
     thrSum.textContent = all.length + " " + S.threads + " · " + S.total + " " + info.cpu_sum.toFixed(1) + "%"
       + (info.window_s ? " · " + S.window + " " + info.window_s + " s" : "");
+    // a sector's helper threads go under its own thread: by its thread id, or failing that by the sector
+    var byTid = {}, bySector = {};
+    all.forEach(function (row) {
+      row.helpers = [];
+      byTid[row.tid] = row;
+      if (row.kind === "sector" && row.sector !== null && row.sector !== undefined) { bySector[row.sector] = row; }
+    });
+    var loose = [];
+    all.forEach(function (row) {
+      if (row.kind !== "helper") { return; }
+      var parent = byTid[row.parent_tid];
+      if (!parent || parent.kind !== "sector") { parent = bySector[row.sector]; }
+      if (parent) { parent.helpers.push(row); } else { loose.push(row); }
+    });
+    all.forEach(function (row) {
+      row.helpers.sort(function (a, b) { return (a.helper || 0) - (b.helper || 0); });
+    });
+    function busy(row) { return row.cpu >= 0.5 || row.helpers.some(function (h) { return h.cpu >= 0.5; }); }
+    function matches(row) {
+      return [row.name, label(row), String(row.sector === null ? "" : row.sector), String(row.tid)]
+        .join(" ").toLowerCase().indexOf(needle) >= 0;
+    }
     var shown = 0;
     KINDS.map(function (kind) {
       var rows = all.filter(function (row) { return row.kind === kind; });
-      var sum = rows.reduce(function (acc, row) { return acc + (row.cpu || 0); }, 0);
-      return { kind: kind, rows: rows, sum: sum };
+      if (kind === "sector") {
+        rows = rows.concat(loose);
+        rows.sort(function (a, b) { return withHelpers(b) - withHelpers(a); });
+      }
+      var sum = rows.reduce(function (acc, row) { return acc + withHelpers(row); }, 0);
+      var count = rows.reduce(function (acc, row) { return acc + 1 + row.helpers.length; }, 0);
+      return { kind: kind, rows: rows, sum: sum, count: count };
     }).sort(function (a, b) { return b.sum - a.sum; }).forEach(function (group) {
       var rows = group.rows.filter(function (row) {
-        if (!showIdle && !(row.cpu >= 0.5)) { return false; }
-        if (!needle) { return true; }
-        return [row.name, label(row), String(row.sector === null ? "" : row.sector), String(row.tid)]
-          .join(" ").toLowerCase().indexOf(needle) >= 0;
+        if (!showIdle && !busy(row)) { return false; }
+        return !needle || matches(row) || row.helpers.some(matches);
       });
       if (!rows.length) { return; }
-      shown += rows.length;
+      var visible = rows.reduce(function (acc, row) { return acc + 1 + row.helpers.length; }, 0);
+      shown += visible;
       var box = el("details", "thr-group");
       box.open = needle !== "" || !!groupOpen[group.kind];
       box.addEventListener("toggle", function () {
@@ -246,10 +295,13 @@
       });
       var head = el("summary", "thr-ghead");
       head.appendChild(el("b", "", S.kind[group.kind] || group.kind));
-      head.appendChild(el("span", "mono dim", rows.length + " / " + group.rows.length + " " + S.threads
+      head.appendChild(el("span", "mono dim", visible + " / " + group.count + " " + S.threads
         + " · " + group.sum.toFixed(1) + "%"));
       box.appendChild(head);
-      rows.forEach(function (row) { box.appendChild(threadRow(row)); });
+      rows.forEach(function (row) {
+        box.appendChild(threadRow(row, false));
+        row.helpers.forEach(function (helper) { box.appendChild(threadRow(helper, true)); });
+      });
       thrGroups.appendChild(box);
     });
     if (!shown) { thrGroups.appendChild(el("p", "dim m0", S.none)); }

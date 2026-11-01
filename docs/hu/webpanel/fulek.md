@@ -113,6 +113,16 @@ Processzor, memória, lemez, a szerver folyamatának terhelése és a bent lév�
 száma, öt másodpercenként frissülve, egyórás vagy 24 órás visszatekintéssel
 és kis grafikonokkal; az előzmény a panel újraindítását is túléli.
 
+A **Szálak** kártya a játékszerver szálait mutatja csoportonként (szektorok,
+bejövő kapcsolatok, küldés, időzített feladatok…), mindegyiknél a nevét, a
+szektorát és a terhelését (100% = egy teljes processzormag). Szűrhető
+szektornévre, -számra, szálnévre vagy TID-re, a csoportok és maga a kártya is
+összecsukható. Egy szektor fő szála egyetlen magon fut; ha egy szektor tickjei
+tartósan nehezek, a mozgást, az ütközésvizsgálatot és az NPC-k
+célpontválasztását a szektor saját **alszálai** is számolják. Ezek a szektor fő szála alatt, behúzva látszanak,
+fázisonkénti bontással (mozgás, ütközésvizsgálat, NPC-célzás), a szektor sorában pedig az
+alszálakkal együtt vett terhelés. A tétlen alszálak néhány perc után leállnak.
+
 ## Ranglisták
 
 A játékbeli ranglisták élő nézete a számlálókból, mellette a havi mentett

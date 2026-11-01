@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from rebsgo.geometry.primitives.vector3 import Vector3
 from rebsgo.geometry.maths.maths import Maths
-from rebsgo.helpers.floats import f32
+from rebsgo.helpers.floats import f32, f32x4
 
 EGYSEGHOSSZ_TURES = f32(1e-06)
 
@@ -13,10 +13,7 @@ class Quaternion:
 
 
     def __init__(self, x=0.0, y=0.0, z=0.0, w=1.0):
-        self._x = f32(x)
-        self._y = f32(y)
-        self._z = f32(z)
-        self._w = f32(w)
+        self._x, self._y, self._z, self._w = f32x4(x, y, z, w)
 
     @staticmethod
     def of_vector_and_w(tengelyek: Vector3, w) -> "Quaternion":
@@ -175,15 +172,12 @@ class Quaternion:
                 osszeg = sajat[mienk] * masik[ove]
                 for (mienk, ove), elojel in zip(recept[1:], elojelek[1:]):
                     osszeg = osszeg + elojel * (sajat[mienk] * masik[ove])
-                ki.append(f32(osszeg))
-            self._x, self._y, self._z, self._w = ki
+                ki.append(osszeg)
+            self._x, self._y, self._z, self._w = f32x4(*ki)
             return self
         if isinstance(arg, Vector3):
             return Quaternion.mult(self, arg)
-        self._x = f32(self._x * arg)
-        self._y = f32(self._y * arg)
-        self._z = f32(self._z * arg)
-        self._w = f32(self._w * arg)
+        self._x, self._y, self._z, self._w = f32x4(self._x * arg, self._y * arg, self._z * arg, self._w * arg)
         return None
 
     @staticmethod
