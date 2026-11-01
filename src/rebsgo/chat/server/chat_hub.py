@@ -103,7 +103,7 @@ class ChatHub:
         try:
             sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
             sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
-            sock.bind(("", admin_port))
+            sock.bind(("127.0.0.1", admin_port))
             sock.listen(50)
             self._admin_server_socket = sock
         except OSError as e:

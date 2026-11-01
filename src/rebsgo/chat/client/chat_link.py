@@ -29,7 +29,8 @@ class ChatLink:
         self._lock = threading.Lock()
 
     def start(self) -> None:
-        self._host = self._server_settings.chat_server_address
+       # self._host = self._server_settings.chat_server_address
+        self._host = "127.0.0.1"    # the chat hub runs in this process its control port listens on loopback only
         self._port = self._server_settings.chat_server_port
         self._connect()
 

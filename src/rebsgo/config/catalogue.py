@@ -109,7 +109,7 @@ BASELINE = {
     "rebsgo.guardrails.gamedata-cache-warn-ms": "200.0",
     "rebsgo.net.game-port": "27050",
     "rebsgo.net.admission-port": "27051",
-    "rebsgo.net.chat-port": "0",
+    "rebsgo.net.chat-port": "27052",
     "rebsgo.net.chat-address": "127.0.0.1",
     "rebsgo.net.max-pilots": "150",
     "rebsgo.net.backlog": "30",
